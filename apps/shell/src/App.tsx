@@ -52,8 +52,9 @@ function GlobalInput({ ticker }: { ticker: ShellTicker }) {
   }, [ticker, focus, screen]);
 
   // Keyboard fallback (arrow keys + Enter + Escape) for desktop/dev.
+  // Pairing and game screens own their own keyboard input.
   useEffect(() => {
-    if (screen === "game") return;
+    if (screen === "game" || screen === "pairing") return;
 
     const KEY_TO_DIR: Record<string, FocusDirection> = {
       ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
