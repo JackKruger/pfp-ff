@@ -505,11 +505,21 @@ body {
 .modal__color--active {
   border-color: #fff;
 }
+.modal__color--focused {
+  box-shadow: 0 0 0 3px rgba(79, 157, 255, 0.6);
+}
+.modal__color--focused.modal__color--active {
+  border-color: var(--focus);
+}
 
 .modal__actions {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+/* Push the destructive Delete action away from Cancel/Save. */
+.modal__actions--has-delete > .btn:first-child {
+  margin-right: auto;
 }
 
 /* ── Game screen ───────────────────────────────────────────── */
@@ -543,6 +553,11 @@ body {
 .game-screen__error-msg {
   font-size: 1.1rem;
   color: var(--text);
+}
+
+.game-screen__error-hint {
+  font-size: 0.75rem;
+  color: var(--text-dim);
 }
 
 .game-screen--no-game {

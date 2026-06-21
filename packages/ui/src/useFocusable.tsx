@@ -4,6 +4,8 @@ import { useFocusManager } from "./FocusContext.js";
 interface UseFocusableOptions {
   /** Focus this element immediately when it mounts (use for the first element on each screen). */
   autoFocus?: boolean;
+  /** Focus scope this node belongs to. Defaults to "root"; set for modal/overlay layers. */
+  scope?: string;
 }
 
 export function useFocusable<T extends HTMLElement>(
@@ -20,15 +22,15 @@ export function useFocusable<T extends HTMLElement>(
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const unregister = manager.register(id, el, () => onSelectRef.current?.());
+    const unregister = manager.register(id, el, () => onSelectRef.current?.(), options.scope);
     if (options.autoFocus) manager.focus(id);
     const unsubscribe = manager.subscribe((focusedId) => setFocused(focusedId === id));
     return () => {
       unregister();
       unsubscribe();
     };
-  // options.autoFocus and id are stable; manager comes from context and is stable
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // options.autoFocus and id are stable; manager comes from context and is stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manager, id]);
 
   return { ref, focused };

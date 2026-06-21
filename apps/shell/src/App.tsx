@@ -88,6 +88,16 @@ function GlobalInput({ ticker }: { ticker: ShellTicker }) {
     };
 
     const onKey = (e: KeyboardEvent) => {
+      // Let text fields (e.g. the profile-name input) handle their own keys —
+      // arrows move the caret, Enter/Escape are handled locally by the field.
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
+      ) {
+        return;
+      }
+
       const dir = KEY_TO_DIR[e.key];
       if (dir) {
         e.preventDefault();

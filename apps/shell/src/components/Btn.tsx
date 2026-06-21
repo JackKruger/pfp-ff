@@ -7,10 +7,23 @@ interface BtnProps {
   autoFocus?: boolean;
   variant?: "primary" | "ghost";
   disabled?: boolean;
+  /** Focus scope — set to confine this button to a modal/overlay layer. */
+  scope?: string;
 }
 
-export function Btn({ id, onClick, children, autoFocus = false, variant = "primary", disabled = false }: BtnProps) {
-  const { ref, focused } = useFocusable<HTMLButtonElement>(id, disabled ? undefined : onClick, { autoFocus });
+export function Btn({
+  id,
+  onClick,
+  children,
+  autoFocus = false,
+  variant = "primary",
+  disabled = false,
+  scope,
+}: BtnProps) {
+  const { ref, focused } = useFocusable<HTMLButtonElement>(id, disabled ? undefined : onClick, {
+    autoFocus,
+    scope,
+  });
 
   return (
     <button

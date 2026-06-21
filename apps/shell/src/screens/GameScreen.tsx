@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createIframeHost, SDK_VERSION } from "@pfp/sdk";
+import { Btn } from "../components/Btn.js";
 import { useShell } from "../store.js";
 import { useShellTicker } from "../ticker.js";
 import type { GameHost } from "@pfp/sdk";
@@ -30,6 +31,14 @@ export function GameScreen() {
     overlayItemRef.current = overlayItem;
   }, [overlayItem]);
 
+  // A dead-end state is one with nothing playable: no game selected, or load failed.
+  // Any input there should escape back to the menu so a controller is never stuck.
+  const selectedGameRef = useRef(selectedGame);
+  useEffect(() => {
+    selectedGameRef.current = selectedGame;
+  }, [selectedGame]);
+  const isDeadEnd = () => !selectedGameRef.current || phaseRef.current === "error";
+
   // Snapshot pairedSlots / profiles at mount so changes don't re-run the iframe effect.
   const pairedSlotsRef = useRef(pairedSlots);
   useEffect(() => {
@@ -53,6 +62,17 @@ export function GameScreen() {
       const poller = ticker.poller;
       const p = phaseRef.current;
       for (const idx of poller.connectedIndices()) {
+        if (isDeadEnd()) {
+          if (
+            poller.justPressed(idx, "a") ||
+            poller.justPressed(idx, "b") ||
+            poller.justPressed(idx, "start")
+          ) {
+            navigate("home");
+            return;
+          }
+          continue;
+        }
         if (p === "playing" && poller.justPressed(idx, "start")) {
           setPhase("overlay");
           setOverlayItem("resume");
@@ -81,6 +101,10 @@ export function GameScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const p = phaseRef.current;
+      if (isDeadEnd()) {
+        if (e.key === "Enter" || e.key === "Escape" || e.key === " ") navigate("home");
+        return;
+      }
       if (e.key === "Escape") {
         if (p === "playing") {
           setPhase("overlay");
@@ -187,9 +211,9 @@ export function GameScreen() {
     return (
       <div className="screen game-screen game-screen--no-game">
         <p>No game selected.</p>
-        <button className="btn btn--primary" onClick={() => navigate("home")}>
+        <Btn id="game-no-game-home" onClick={() => navigate("home")} autoFocus>
           Back to Home
-        </button>
+        </Btn>
       </div>
     );
   }
@@ -208,9 +232,10 @@ export function GameScreen() {
       {phase === "error" && (
         <div className="game-screen__error">
           <p className="game-screen__error-msg">Game failed to load.</p>
-          <button className="btn btn--primary" onClick={() => navigate("home")}>
+          <Btn id="game-error-home" onClick={() => navigate("home")} autoFocus>
             ← Back to Menu
-          </button>
+          </Btn>
+          <p className="game-screen__error-hint">A / Enter · B / Esc to return</p>
         </div>
       )}
 

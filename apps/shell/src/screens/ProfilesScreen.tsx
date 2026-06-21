@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useFocusable } from "@pfp/ui";
+import { useEffect, useRef, useState } from "react";
+import { useFocusable, useFocusManager } from "@pfp/ui";
 import { Btn } from "../components/Btn.js";
 import { useShell } from "../store.js";
 import type { Profile } from "@pfp/data";
@@ -7,16 +7,62 @@ import { PLAYER_COLORS } from "../games.js";
 
 const PRESET_COLORS = [...PLAYER_COLORS, "#a855f7", "#ec4899", "#14b8a6", "#f97316"];
 
-function ProfileRow({ profile, index, onEdit, onDelete }: { profile: Profile; index: number; onEdit: () => void; onDelete: () => void }) {
-  const { ref, focused } = useFocusable<HTMLDivElement>(`profile-${profile.id}`, onEdit, { autoFocus: index === 0 });
+/** Modal layer: navigation/selection is trapped here so a controller can't drift to the rows behind. */
+const MODAL_SCOPE = "profile-modal";
+
+function ColorSwatch({
+  color,
+  active,
+  onPick,
+}: {
+  color: string;
+  active: boolean;
+  onPick: () => void;
+}) {
+  const { ref, focused } = useFocusable<HTMLButtonElement>(`color-${color}`, onPick, {
+    scope: MODAL_SCOPE,
+  });
+  return (
+    <button
+      ref={ref}
+      className={`modal__color${active ? " modal__color--active" : ""}${focused ? " modal__color--focused" : ""}`}
+      style={{ background: color }}
+      onClick={onPick}
+      aria-label={`Color ${color}`}
+      aria-pressed={active}
+    />
+  );
+}
+
+function ProfileRow({
+  profile,
+  index,
+  onEdit,
+  onDelete,
+}: {
+  profile: Profile;
+  index: number;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { ref, focused } = useFocusable<HTMLDivElement>(`profile-${profile.id}`, onEdit, {
+    autoFocus: index === 0,
+  });
 
   return (
-    <div ref={ref} className={`profile-row${focused ? " profile-row--focused" : ""}`} onClick={onEdit}>
+    <div
+      ref={ref}
+      className={`profile-row${focused ? " profile-row--focused" : ""}`}
+      onClick={onEdit}
+    >
       <div className="profile-row__dot" style={{ background: profile.color }} />
       <span className="profile-row__name">{profile.name}</span>
       <button
         className="profile-row__delete"
-        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
         aria-label={`Delete ${profile.name}`}
       >
         ✕
@@ -27,13 +73,27 @@ function ProfileRow({ profile, index, onEdit, onDelete }: { profile: Profile; in
 
 interface EditModalProps {
   profile: Profile | null;
+  /** Suggested name for a new profile, so controller users (who can't type) can still save. */
+  defaultName: string;
   onSave: (name: string, color: string) => void;
+  onDelete?: () => void;
   onClose: () => void;
 }
 
-function EditModal({ profile, onSave, onClose }: EditModalProps) {
-  const [name, setName] = useState(profile?.name ?? "");
+function EditModal({ profile, defaultName, onSave, onDelete, onClose }: EditModalProps) {
+  const manager = useFocusManager();
+  const [name, setName] = useState(profile?.name ?? defaultName);
   const [color, setColor] = useState(profile?.color ?? PRESET_COLORS[0]);
+
+  const save = () => name.trim() && onSave(name.trim(), color);
+
+  // Trap focus in the modal while it's open; route B / Esc to closing it.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    manager.pushScope(MODAL_SCOPE, () => onCloseRef.current());
+    return () => manager.popScope();
+  }, [manager]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -45,30 +105,31 @@ function EditModal({ profile, onSave, onClose }: EditModalProps) {
             className="modal__input"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save();
+              else if (e.key === "Escape") onClose();
+            }}
             autoFocus
             maxLength={20}
           />
         </label>
         <div className="modal__colors">
           {PRESET_COLORS.map((c) => (
-            <button
-              key={c}
-              className={`modal__color${c === color ? " modal__color--active" : ""}`}
-              style={{ background: c }}
-              onClick={() => setColor(c)}
-              aria-label={`Color ${c}`}
-            />
+            <ColorSwatch key={c} color={c} active={c === color} onPick={() => setColor(c)} />
           ))}
         </div>
-        <div className="modal__actions">
-          <button className="btn btn--ghost" onClick={onClose}>Cancel</button>
-          <button
-            className="btn btn--primary"
-            onClick={() => name.trim() && onSave(name.trim(), color)}
-            disabled={!name.trim()}
-          >
+        <div className={`modal__actions${onDelete ? " modal__actions--has-delete" : ""}`}>
+          {onDelete && (
+            <Btn id="modal-delete" variant="ghost" scope={MODAL_SCOPE} onClick={onDelete}>
+              Delete
+            </Btn>
+          )}
+          <Btn id="modal-cancel" variant="ghost" scope={MODAL_SCOPE} onClick={onClose}>
+            Cancel
+          </Btn>
+          <Btn id="modal-save" scope={MODAL_SCOPE} onClick={save} disabled={!name.trim()}>
             Save
-          </button>
+          </Btn>
         </div>
       </div>
     </div>
@@ -88,11 +149,9 @@ export function ProfilesScreen() {
     setEditing(null);
   }
 
-  const newRef = useFocusable<HTMLDivElement>(
-    "profile-new",
-    () => setEditing("new"),
-    { autoFocus: profiles.length === 0 },
-  );
+  const newRef = useFocusable<HTMLDivElement>("profile-new", () => setEditing("new"), {
+    autoFocus: profiles.length === 0,
+  });
 
   return (
     <div className="screen profiles-screen">
@@ -128,7 +187,16 @@ export function ProfilesScreen() {
       {editing !== null && (
         <EditModal
           profile={editing === "new" ? null : editing}
+          defaultName={`Player ${profiles.length + 1}`}
           onSave={handleSave}
+          onDelete={
+            editing !== "new"
+              ? () => {
+                  deleteProfile(editing.id);
+                  setEditing(null);
+                }
+              : undefined
+          }
           onClose={() => setEditing(null)}
         />
       )}
