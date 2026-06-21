@@ -156,7 +156,7 @@ export function PairingScreen() {
   }, [selectedGame?.players.max, ticker, setPairedSlots]);
 
   const minPlayers = selectedGame?.players.min ?? 1;
-  const canStart = pairedSlots.length >= minPlayers;
+  const canStart = pairedSlots.length >= 1;
   const slotCount = selectedGame?.players.max ?? 4;
 
   // How many unjoinable slots have controllers available for them.
@@ -208,7 +208,7 @@ export function PairingScreen() {
       </div>
 
       {minPlayers > 1 && pairedSlots.length < minPlayers && (
-        <p className="pairing-screen__need">Need at least {minPlayers} players to start</p>
+        <p className="pairing-screen__need">Best with {minPlayers}+ players</p>
       )}
     </div>
   );
