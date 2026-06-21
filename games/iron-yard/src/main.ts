@@ -5,7 +5,14 @@ import * as THREE from "three";
 import { createGameClient, type LaunchContext, type GameResult } from "@pfp/sdk";
 import { CONFIG, weaponStats } from "./config";
 import { spawnPoints, weaponRacks, obstacles } from "./arena";
-import { makePlayer, applyInput, maybeRespawn, weaponOf, type Player, type PlayerInput } from "./player";
+import {
+  makePlayer,
+  applyInput,
+  maybeRespawn,
+  weaponOf,
+  type Player,
+  type PlayerInput,
+} from "./player";
 import { resolveHits, type GameEvent } from "./combat";
 import { botInput, pickBotName, pickBotWeapon, botDifficultyTuning } from "./bot";
 import { PhysicsWorld, initRapier } from "./physics";
@@ -109,9 +116,12 @@ export class Game {
       pillars: obstacles(),
     });
     this.physics.spawnArenaProps([
-      { x: -10, y: 0, z: -10 }, { x:  10, y: 0, z: -10 },
-      { x: -10, y: 0, z:  10 }, { x:  10, y: 0, z:  10 },
-      { x:   0, y: 0, z: -12 }, { x:   0, y: 0, z:  12 },
+      { x: -10, y: 0, z: -10 },
+      { x: 10, y: 0, z: -10 },
+      { x: -10, y: 0, z: 10 },
+      { x: 10, y: 0, z: 10 },
+      { x: 0, y: 0, z: -12 },
+      { x: 0, y: 0, z: 12 },
     ]);
     this.ticks = 0;
     this.lastTickMs = Date.now();
@@ -138,7 +148,6 @@ export class Game {
     this.rigs = new Map();
     this.propMeshes3D = [];
     this.shakeAmount = 0;
-    this.shakeAmount = 0;
     this.sparks = [];
     this.killFeedItems = [];
     this.helmFragments = [];
@@ -164,12 +173,14 @@ export class Game {
 
     // ---- Issue 5: Hit flash overlay ----
     this.hitFlashEl = document.createElement("div");
-    this.hitFlashEl.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;background:#fff;pointer-events:none;opacity:0;transition:opacity 0.08s;z-index:10";
+    this.hitFlashEl.style.cssText =
+      "position:absolute;top:0;left:0;width:100%;height:100%;background:#fff;pointer-events:none;opacity:0;transition:opacity 0.08s;z-index:10";
     document.body.appendChild(this.hitFlashEl);
 
     // ---- Issue 9: Kill feed ----
     this.killFeedEl = document.createElement("div");
-    this.killFeedEl.style.cssText = "position:absolute;top:60px;right:20px;width:300px;pointer-events:none;font-family:sans-serif;font-size:14px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.8);z-index:5";
+    this.killFeedEl.style.cssText =
+      "position:absolute;top:60px;right:20px;width:300px;pointer-events:none;font-family:sans-serif;font-size:14px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.8);z-index:5";
     document.body.appendChild(this.killFeedEl);
   }
 
@@ -243,8 +254,8 @@ export class Game {
   }
 
   ensureBots() {
-    const humans = [...this.players.values()].filter(p => !p.bot).length;
-    let bots = [...this.players.values()].filter(p => p.bot).length;
+    const humans = [...this.players.values()].filter((p) => !p.bot).length;
+    let bots = [...this.players.values()].filter((p) => p.bot).length;
     let desired = 0;
     if (humans === 1) desired = Math.min(this.botTarget, CONFIG.MAX_PLAYERS - humans);
     while (bots < desired && this.players.size < CONFIG.MAX_PLAYERS) {
@@ -252,7 +263,7 @@ export class Game {
       bots++;
     }
     while (bots > desired) {
-      const botPlayer = [...this.players.values()].find(p => p.bot);
+      const botPlayer = [...this.players.values()].find((p) => p.bot);
       if (!botPlayer) break;
       this.removePlayer(botPlayer.id);
       bots--;
@@ -300,7 +311,7 @@ export class Game {
     this.stop();
     if (!this.context) return;
 
-    const humans = [...this.players.values()].filter(p => !p.bot);
+    const humans = [...this.players.values()].filter((p) => !p.bot);
     const humanSlots = new Map<number, number>();
     let si = 0;
     for (const p of humans) {
@@ -312,7 +323,7 @@ export class Game {
     const standings = sorted.map((p, i) => {
       const hSlot = humanSlots.get(p.id);
       const slot = hSlot !== undefined ? hSlot : botSlotOffset++;
-      const ctxPlayer = this.context!.players.find(cp => cp.slot === hSlot);
+      const ctxPlayer = this.context!.players.find((cp) => cp.slot === hSlot);
       return {
         slot,
         profileId: ctxPlayer?.profileId ?? null,
@@ -333,7 +344,11 @@ export class Game {
   }
 
   // ---- Issue 7: Spawn sparks ----
-  spawnSparks(worldPos: THREE.Vector3Like, color: THREE.Color = new THREE.Color(0xffaa44), count = 8) {
+  spawnSparks(
+    worldPos: THREE.Vector3Like,
+    color: THREE.Color = new THREE.Color(0xffaa44),
+    count = 8,
+  ) {
     const p = new THREE.Vector3(worldPos.x!, worldPos.y!, worldPos.z!);
     for (let i = 0; i < count; i++) {
       const mesh = createSparkMesh();
@@ -392,8 +407,10 @@ export class Game {
         input = this.input.getInput(p.id, p.yaw);
 
         // Issue 1: Compute weapon tip target from right stick aim + player position
-        const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
-        const rx =  Math.cos(p.yaw), rz = -Math.sin(p.yaw);
+        const fx = -Math.sin(p.yaw),
+          fz = -Math.cos(p.yaw);
+        const rx = Math.cos(p.yaw),
+          rz = -Math.sin(p.yaw);
         const w = weaponOf(p);
         const armLen = 0.6;
         const maxReach = w.length + 1.2;
@@ -431,8 +448,18 @@ export class Game {
           }
         }
       } else {
-        input = { mv: { x: 0, y: 0 }, yaw: p.yaw, sprint: false, jump: false,
-                  blocking: false, swinging: false, weaponTip: p.weaponTip, attackType: null, aimDX: 0, aimDY: 0 };
+        input = {
+          mv: { x: 0, y: 0 },
+          yaw: p.yaw,
+          sprint: false,
+          jump: false,
+          blocking: false,
+          swinging: false,
+          weaponTip: p.weaponTip,
+          attackType: null,
+          aimDX: 0,
+          aimDY: 0,
+        };
       }
       applyInput(p, input, dtMs);
       p.weaponTipTarget = { x: p.weaponTip.x, y: p.weaponTip.y, z: p.weaponTip.z };
@@ -441,16 +468,19 @@ export class Game {
     // 2) Sync physics bodies + drive swords
     for (const p of this.players.values()) {
       this.physics.setBodyPos(p.id, p.pos);
-      const stunned  = now < p.stunUntilMs;
-      const dead     = !p.alive;
-      let disarmed   = now < p.disarmedUntilMs;
-      const knocked  = now < p.knockedDownUntilMs;
+      const stunned = now < p.stunUntilMs;
+      const dead = !p.alive;
+      let disarmed = now < p.disarmedUntilMs;
+      const knocked = now < p.knockedDownUntilMs;
 
       if (disarmed && !stunned && !dead && !p.severedArm) {
         const sw = this.physics.swordState(p.id);
         if (sw) {
           const dd = (sw.pos.x - p.pos.x) ** 2 + (sw.pos.z - p.pos.z) ** 2;
-          if (dd < 1.0) { p.disarmedUntilMs = 0; disarmed = false; }
+          if (dd < 1.0) {
+            p.disarmedUntilMs = 0;
+            disarmed = false;
+          }
         }
       }
       if (stunned || dead || disarmed || knocked) {
@@ -466,8 +496,12 @@ export class Game {
       const horizSpeed = Math.hypot(p.vel.x, p.vel.z);
       if (!knocked && !dead && p.onGround && horizSpeed > 0.5) {
         const stepHz = 1.5 + horizSpeed * 0.3;
-        const phase  = (this.ticks * dt * stepHz * Math.PI * 2) + (p.id * 0.7);
-        this.physics.pushTorso(p.id, { x: 0, y: Math.sin(phase) * Math.min(1.5, horizSpeed * 0.4) * 0.06, z: 0 });
+        const phase = this.ticks * dt * stepHz * Math.PI * 2 + p.id * 0.7;
+        this.physics.pushTorso(p.id, {
+          x: 0,
+          y: Math.sin(phase) * Math.min(1.5, horizSpeed * 0.4) * 0.06,
+          z: 0,
+        });
       }
     }
     this.physics.step();
@@ -477,7 +511,11 @@ export class Game {
       const s = this.physics.swordState(p.id);
       if (!s) continue;
       p.weaponTip = s.pos;
-      const v = { x: s.vel.x - (p.vel.x || 0), y: s.vel.y - (p.vel.y || 0), z: s.vel.z - (p.vel.z || 0) };
+      const v = {
+        x: s.vel.x - (p.vel.x || 0),
+        y: s.vel.y - (p.vel.y || 0),
+        z: s.vel.z - (p.vel.z || 0),
+      };
       const mag = Math.hypot(v.x, v.y, v.z);
       const lv = p._lastTipVel;
       const lmag = lv ? Math.hypot(lv.x, lv.y, lv.z) : 0;
@@ -500,7 +538,11 @@ export class Game {
           p.bleedAccum -= whole;
           p.hp = Math.max(0, p.hp - whole);
           if (p.hp <= 0) {
-            p.alive = false; p.hp = 0; p.deadAtMs = now; p.deaths++; p.killStreak = 0;
+            p.alive = false;
+            p.hp = 0;
+            p.deadAtMs = now;
+            p.deaths++;
+            p.killStreak = 0;
           }
         }
       }
@@ -578,7 +620,8 @@ export class Game {
           const q = arr[j];
           if (!q.alive) continue;
           if (now - q.spawnedAtMs < CONFIG.PLAYER.spawnInvulnMs) continue;
-          const dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z;
+          const dx = q.pos.x - p.pos.x,
+            dz = q.pos.z - p.pos.z;
           if (dx * dx + dz * dz > radius2 * radius2) continue;
           const dl = Math.sqrt(dx * dx + dz * dz) || 1;
           const slamMag = 4 + pSp * 0.9;
@@ -586,7 +629,8 @@ export class Game {
           q.impulse.z += (dz / dl) * slamMag;
           q.stamina = Math.max(0, q.stamina - 18);
           this.physics.pushTorso(q.id, { x: (dx / dl) * 7, y: 1.5, z: (dz / dl) * 7 });
-          p.vel.x *= 0.4; p.vel.z *= 0.4;
+          p.vel.x *= 0.4;
+          p.vel.z *= 0.4;
           p.stamina = Math.max(0, p.stamina - 10);
           p.lastSlamAtMs = now;
 
@@ -636,9 +680,12 @@ export class Game {
           // Issue 7: Sparks at hit point
           const at = e.at as { x: number; y: number; z: number } | undefined;
           if (at) {
-            const color = e.zone === "head" ? new THREE.Color(0xff4444)
-                        : e.zone === "legs" ? new THREE.Color(0x44aaff)
-                        : new THREE.Color(0xffee88);
+            const color =
+              e.zone === "head"
+                ? new THREE.Color(0xff4444)
+                : e.zone === "legs"
+                  ? new THREE.Color(0x44aaff)
+                  : new THREE.Color(0xffee88);
             this.spawnSparks(at, color);
           }
 
@@ -705,28 +752,62 @@ export class Game {
 
       // Round timeout
       if (this.matchPhase === "playing" && this.roundEndsAt > 0 && now >= this.roundEndsAt) {
-        let topScore = -1, topId: number | null = null, tied = false;
+        let topScore = -1,
+          topId: number | null = null,
+          tied = false;
         for (const p of this.players.values()) {
-          if (p.score > topScore) { topScore = p.score; topId = p.id; tied = false; }
-          else if (p.score === topScore) tied = true;
+          if (p.score > topScore) {
+            topScore = p.score;
+            topId = p.id;
+            tied = false;
+          } else if (p.score === topScore) tied = true;
         }
         this.endRound(tied ? null : topId, "timeout", now);
       }
     } else if (this.matchPhase === "intermission") {
       if (now >= this.phaseUntil) {
         for (const p of this.players.values()) {
-          p.score = 0; p.deaths = 0;
-          p.alive = false; p.deadAtMs = 0;
-          p.helmIntact = true; p.killStreak = 0; p.roundDamage = 0;
+          p.score = 0;
+          p.deaths = 0;
+          p.alive = false;
+          p.deadAtMs = 0;
+          p.helmIntact = true;
+          p.killStreak = 0;
+          p.roundDamage = 0;
           p.severedLeg = false;
-          p.attackPhase = "idle"; p.attackType = null; p.attackT = 0;
+          p.attackPhase = "idle";
+          p.attackType = null;
+          p.attackT = 0;
         }
         this.matchPhase = "countdown";
         this.phaseUntil = now + CONFIG.MATCH.countdownMs;
-        this.winnerId = null; this.winReason = null;
+        this.winnerId = null;
+        this.winReason = null;
         this.roundIndex++;
         // Issue 12: matchStart event
         this.pendingHits.push({ kind: "matchStart", round: this.roundIndex });
+      }
+    }
+
+    // Advance attack state machine for all players
+    for (const p of this.players.values()) {
+      if (p.attackPhase === "idle" || !p.alive) continue;
+      const atkType = p.attackType || "swing";
+      const phases = { windup: 380, release: 240, recovery: 320 };
+      const dur = phases[p.attackPhase] || 380;
+      if (now - p.attackStartMs >= dur) {
+        if (p.attackPhase === "windup") {
+          p.attackPhase = "release";
+          p.attackStartMs = now;
+        } else if (p.attackPhase === "release") {
+          p.attackPhase = "recovery";
+          p.attackStartMs = now;
+        } else if (p.attackPhase === "recovery") {
+          p.attackPhase = "idle";
+          p.attackType = null;
+          p.attackStartMs = 0;
+          p.attackNextAtMs = now + 200;
+        }
       }
     }
 
@@ -735,7 +816,7 @@ export class Game {
       if (!p.alive) continue;
       if (p.attackPhase !== "idle") continue;
       // Add subtle sinusoidal sway to weapon target
-      const swayT = (this.ticks * dt * 1.5) + (p.id * 0.5);
+      const swayT = this.ticks * dt * 1.5 + p.id * 0.5;
       const swayAmp = 0.03;
       if (p.weaponTipTarget) {
         p.weaponTipTarget.x += Math.sin(swayT) * swayAmp;
@@ -766,14 +847,22 @@ export class Game {
     }
 
     // Find camera target: all human players
-    const humanPlayers = [...this.players.values()].filter(p => !p.bot);
+    const humanPlayers = [...this.players.values()].filter((p) => !p.bot);
     if (humanPlayers.length > 0) {
-      let cx = 0, cz = 0, count = 0;
-      for (const p of humanPlayers) { cx += p.pos.x; cz += p.pos.z; count++; }
-      cx /= count; cz /= count;
+      let cx = 0,
+        cz = 0,
+        count = 0;
+      for (const p of humanPlayers) {
+        cx += p.pos.x;
+        cz += p.pos.z;
+        count++;
+      }
+      cx /= count;
+      cz /= count;
 
       // Issue 4: Screen shake
-      let shakeX = 0, shakeY = 0;
+      let shakeX = 0,
+        shakeY = 0;
       if (this.shakeAmount > 0.01) {
         shakeX = (Math.random() - 0.5) * 2 * this.shakeAmount;
         shakeY = (Math.random() - 0.5) * 2 * this.shakeAmount * 0.5;
@@ -831,28 +920,14 @@ export class Game {
       let attackT = -1;
       let attackType: string | null = null;
       if (p.attackPhase !== "idle") {
-        const phaseDef = p.attackType ? { windup: 380, release: 240, recovery: 320 } : null;
-        // Simplified attack progress for animation
         const phases: Record<string, number> = {
-          windup: 380, release: 240, recovery: 320,
+          windup: 380,
+          release: 240,
+          recovery: 320,
         };
         const dur = phases[p.attackPhase] || 380;
         attackT = Math.min(1, (now - p.attackStartMs) / dur);
         attackType = p.attackType;
-
-        // Advance attack state machine
-        if (p.attackPhase === "windup" && now - p.attackStartMs >= 380) {
-          p.attackPhase = "release";
-          p.attackStartMs = now;
-        } else if (p.attackPhase === "release" && now - p.attackStartMs >= 240) {
-          p.attackPhase = "recovery";
-          p.attackStartMs = now;
-        } else if (p.attackPhase === "recovery" && now - p.attackStartMs >= 320) {
-          p.attackPhase = "idle";
-          p.attackType = null;
-          p.attackStartMs = 0;
-          p.attackNextAtMs = now + 200;
-        }
       }
 
       const pw = weaponOf(p);
@@ -866,7 +941,11 @@ export class Game {
         crippled: Date.now() < p.crippledUntilMs,
         stunned: Date.now() < p.stunUntilMs,
         verAim: p.weaponTip.y - p.pos.y - 1.4,
-        tipDist: Math.hypot(p.weaponTip.x - p.pos.x, p.weaponTip.y - p.pos.y - 1.4, p.weaponTip.z - p.pos.z),
+        tipDist: Math.hypot(
+          p.weaponTip.x - p.pos.x,
+          p.weaponTip.y - p.pos.y - 1.4,
+          p.weaponTip.z - p.pos.z,
+        ),
         torsoRot: this.physics.torsoState(p.id)?.rot ?? null,
         headRot: this.physics.headState(p.id)?.rot ?? null,
         playerYaw: p.yaw,
@@ -934,7 +1013,10 @@ export class Game {
       let mvp: Player | null = null;
       let maxDmg = 0;
       for (const p of arr) {
-        if (p.roundDamage > maxDmg) { maxDmg = p.roundDamage; mvp = p; }
+        if (p.roundDamage > maxDmg) {
+          maxDmg = p.roundDamage;
+          mvp = p;
+        }
       }
       if (mvp) {
         html += `<div style="position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);font-size:18px;color:#ffd700;text-shadow:0 1px 4px rgba(0,0,0,0.8)">MVP: ${mvp.name} (${maxDmg} dmg)</div>`;
@@ -973,7 +1055,10 @@ export class Game {
       let lastAttacker: Player | null = null;
       let lastHitAt = 0;
       for (const [aid, hitTime] of p.lastHitAtMs) {
-        if (hitTime > lastHitAt) { lastHitAt = hitTime; lastAttacker = this.players.get(aid) ?? null; }
+        if (hitTime > lastHitAt) {
+          lastHitAt = hitTime;
+          lastAttacker = this.players.get(aid) ?? null;
+        }
       }
       if (lastAttacker && Date.now() - lastHitAt < 800) {
         const dx = lastAttacker.pos.x - p.pos.x;
@@ -1015,7 +1100,7 @@ export class Game {
       killFeedLines.push(item.text);
     }
     if (killFeedLines.length > 0) {
-      html += `<div style="position:absolute;top:60px;right:20px;width:280px;text-align:right;font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,0.8);pointer-events:none">${killFeedLines.map(t => `<div style="margin-bottom:2px">${t}</div>`).join("")}</div>`;
+      html += `<div style="position:absolute;top:60px;right:20px;width:280px;text-align:right;font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,0.8);pointer-events:none">${killFeedLines.map((t) => `<div style="margin-bottom:2px">${t}</div>`).join("")}</div>`;
     }
 
     hud.innerHTML = html;

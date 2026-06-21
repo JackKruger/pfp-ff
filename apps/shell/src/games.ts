@@ -118,6 +118,7 @@ export const GAMES: GameEntry[] = [
       rounds: { label: "Rounds", scope: "match" },
       durationMs: { label: "Duration", scope: "match" },
     },
+    disabled: true,
   },
 ];
 

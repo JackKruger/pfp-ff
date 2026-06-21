@@ -5,6 +5,7 @@ import { useShell } from "../store.js";
 import { useShellTicker } from "../ticker.js";
 import type { GameHost } from "@pfp/sdk";
 import { PLAYER_COLORS } from "../games.js";
+import { recordMatchBestEffort } from "../gameOver.js";
 
 // "done" = game over received; blocks overlay until results navigation fires.
 type Phase = "loading" | "playing" | "overlay" | "error" | "done";
@@ -182,7 +183,8 @@ export function GameScreen() {
       closed = true;
       setPhase("done");
       setResult(result);
-      recordMatch(result).catch(console.error);
+      navigate("results");
+      void recordMatchBestEffort(result, recordMatch);
       host.dispose();
       if (hostRef.current === host) hostRef.current = null;
     });

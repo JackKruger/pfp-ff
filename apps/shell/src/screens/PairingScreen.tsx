@@ -5,6 +5,7 @@ import { PlayerCard } from "../components/PlayerCard.js";
 import { Btn } from "../components/Btn.js";
 import { useShell } from "../store.js";
 import { useShellTicker } from "../ticker.js";
+import { canStartGame } from "../shellRules.js";
 
 // Negative indices are keyboard-only slots and never real Gamepad API indices.
 const keyboardGamepadIndex = (slot: number): number => -slot - 1;
@@ -161,7 +162,7 @@ export function PairingScreen() {
   }, [selectedGame?.players.max, ticker, setPairedSlots]);
 
   const minPlayers = selectedGame?.players.min ?? 1;
-  const canStart = pairedSlots.length >= 1;
+  const canStart = canStartGame(pairedSlots.length, minPlayers);
   const slotCount = selectedGame?.players.max ?? 4;
 
   // How many unjoinable slots have controllers available for them.

@@ -25,7 +25,7 @@
 
 ## Games to build
 
-- [ ] Pong (Phase 5) — first real native-TS game through the SDK contract
+- [x] Pong (Phase 5) — first real native-TS game through the SDK contract
 
 ---
 
