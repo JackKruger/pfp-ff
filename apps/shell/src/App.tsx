@@ -75,7 +75,7 @@ function GlobalInput({ ticker }: { ticker: ShellTicker }) {
 
 export function App() {
   const ticker = useMemo(() => new ShellTicker(), []);
-  const { loadData } = useShell();
+  const { loadData, dataReady } = useShell();
 
   useEffect(() => {
     void loadData();
@@ -85,6 +85,15 @@ export function App() {
     ticker.start();
     return () => ticker.stop();
   }, [ticker]);
+
+  if (!dataReady) {
+    return (
+      <div className="boot-loading">
+        <div className="boot-loading__spinner" />
+        <p>Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <TickerCtx.Provider value={ticker}>

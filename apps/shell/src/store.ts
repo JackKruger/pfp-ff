@@ -10,6 +10,7 @@ const dataStore = new IndexedDbDataStore({ dbName: "pfp-ff" });
 
 interface ShellState {
   screen: Screen;
+  dataReady: boolean;
   selectedGame: GameManifest | null;
   pairedSlots: PairingSlot[];
   lastResult: GameResult | null;
@@ -30,6 +31,7 @@ interface ShellState {
 
 export const useShell = create<ShellState>((set, get) => ({
   screen: "home",
+  dataReady: false,
   selectedGame: null,
   pairedSlots: [],
   lastResult: null,
@@ -57,7 +59,7 @@ export const useShell = create<ShellState>((set, get) => ({
       dataStore.listProfiles(),
       dataStore.listMatches(),
     ]);
-    set({ profiles, matches });
+    set({ profiles, matches, dataReady: true });
   },
 
   async createProfile(input) {

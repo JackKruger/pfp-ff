@@ -1,14 +1,91 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createIframeHost, SDK_VERSION } from "@pfp/sdk";
 import { useShell } from "../store.js";
+import { useShellTicker } from "../ticker.js";
 import type { GameHost } from "@pfp/sdk";
 import { PLAYER_COLORS } from "../games.js";
 
+type Phase = "loading" | "playing" | "overlay" | "error";
+type OverlayItem = "resume" | "quit";
+
+const LOAD_TIMEOUT_MS = 8_000;
+
 export function GameScreen() {
   const { selectedGame, pairedSlots, profiles, setResult, recordMatch, navigate } = useShell();
+  const ticker = useShellTicker();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const hostRef = useRef<GameHost | null>(null);
 
+  const [phase, setPhase] = useState<Phase>("loading");
+  const [overlayItem, setOverlayItem] = useState<OverlayItem>("resume");
+
+  // Stable refs so tick / keyboard handlers always read current values.
+  const phaseRef = useRef(phase);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  const overlayItemRef = useRef(overlayItem);
+  useEffect(() => { overlayItemRef.current = overlayItem; }, [overlayItem]);
+
+  // Timeout: if the game doesn't call ready() within 8 s, show an error.
+  useEffect(() => {
+    if (phase !== "loading") return;
+    const timer = setTimeout(() => setPhase("error"), LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
+  // Controller: Start = toggle overlay; in overlay, ↑↓/A/B navigate.
+  useEffect(() => {
+    return ticker.onTick(() => {
+      const poller = ticker.poller;
+      const p = phaseRef.current;
+      for (const idx of poller.connectedIndices()) {
+        if (p === "playing" && poller.justPressed(idx, "start")) {
+          setPhase("overlay");
+          setOverlayItem("resume");
+          return;
+        }
+        if (p === "overlay") {
+          if (poller.justPressed(idx, "b") || poller.justPressed(idx, "start")) {
+            setPhase("playing");
+            return;
+          }
+          if (poller.justPressed(idx, "up") || poller.justPressed(idx, "down")) {
+            setOverlayItem((prev) => (prev === "resume" ? "quit" : "resume"));
+            return;
+          }
+          if (poller.justPressed(idx, "a")) {
+            if (overlayItemRef.current === "quit") navigate("home");
+            else setPhase("playing");
+            return;
+          }
+        }
+      }
+    });
+  }, [ticker, navigate]);
+
+  // Keyboard: Escape = toggle overlay; Enter = confirm selection.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const p = phaseRef.current;
+      if (e.key === "Escape") {
+        if (p === "playing") { setPhase("overlay"); setOverlayItem("resume"); }
+        else if (p === "overlay") setPhase("playing");
+        return;
+      }
+      if (p === "overlay") {
+        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          setOverlayItem((prev) => (prev === "resume" ? "quit" : "resume"));
+        }
+        if (e.key === "Enter") {
+          if (overlayItemRef.current === "quit") navigate("home");
+          else setPhase("playing");
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate]);
+
+  // Wire the SDK host when the iframe loads.
   useEffect(() => {
     const iframe = iframeRef.current;
     const game = selectedGame;
@@ -32,12 +109,8 @@ export function GameScreen() {
       });
 
       host.onReady(() => {
-        host.launch({
-          sessionId: crypto.randomUUID(),
-          sdkVersion: SDK_VERSION,
-          players,
-          settings: {},
-        });
+        setPhase("playing");
+        host.launch({ sessionId: crypto.randomUUID(), sdkVersion: SDK_VERSION, players, settings: {} });
       });
 
       host.onGameOver((result) => {
@@ -45,6 +118,11 @@ export function GameScreen() {
         void recordMatch(result);
         host.dispose();
         hostRef.current = null;
+      });
+
+      host.onError(({ message }) => {
+        console.error("Game error:", message);
+        setPhase("error");
       });
     };
 
@@ -61,7 +139,7 @@ export function GameScreen() {
 
   if (!selectedGame) {
     return (
-      <div className="screen game-screen game-screen--error">
+      <div className="screen game-screen game-screen--no-game">
         <p>No game selected.</p>
         <button className="btn btn--primary" onClick={() => navigate("home")}>
           Back to Home
@@ -72,13 +150,55 @@ export function GameScreen() {
 
   return (
     <div className="screen game-screen">
+      {/* Loading indicator */}
+      {phase === "loading" && (
+        <div className="game-screen__loading">
+          <div className="boot-loading__spinner" />
+          <p>Loading {selectedGame.name}…</p>
+        </div>
+      )}
+
+      {/* Error state */}
+      {phase === "error" && (
+        <div className="game-screen__error">
+          <p className="game-screen__error-msg">Game failed to load.</p>
+          <button className="btn btn--primary" onClick={() => navigate("home")}>
+            ← Back to Menu
+          </button>
+        </div>
+      )}
+
       <iframe
         ref={iframeRef}
         className="game-screen__iframe"
         title={selectedGame.name}
         allow="gamepad"
         sandbox="allow-scripts allow-same-origin"
+        // Hide while loading so the blank iframe doesn't flash
+        style={{ visibility: phase === "loading" ? "hidden" : "visible" }}
       />
+
+      {/* Quit overlay */}
+      {phase === "overlay" && (
+        <div className="game-overlay">
+          <div className="game-overlay__box">
+            <h2 className="game-overlay__title">Paused</h2>
+            <button
+              className={`game-overlay__item${overlayItem === "resume" ? " game-overlay__item--active" : ""}`}
+              onClick={() => setPhase("playing")}
+            >
+              ▶ Resume
+            </button>
+            <button
+              className={`game-overlay__item${overlayItem === "quit" ? " game-overlay__item--active" : ""}`}
+              onClick={() => navigate("home")}
+            >
+              ✕ Quit to Menu
+            </button>
+            <p className="game-overlay__hint">↑↓ navigate · A select · B / Esc resume</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

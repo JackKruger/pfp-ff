@@ -25,6 +25,16 @@ body {
   overflow: hidden;
 }
 
+/* ── Screen transitions ────────────────────────────────────── */
+@keyframes screen-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Screens ───────────────────────────────────────────────── */
 .screen {
   display: flex;
@@ -32,6 +42,27 @@ body {
   height: 100vh;
   padding: 32px 48px;
   gap: var(--gap);
+  animation: screen-enter 0.14s ease-out both;
+}
+
+/* ── Boot / loading ────────────────────────────────────────── */
+.boot-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 20px;
+  color: var(--text-dim);
+}
+
+.boot-loading__spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--focus);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 /* ── Buttons ───────────────────────────────────────────────── */
@@ -173,7 +204,7 @@ body {
 
 .player-card {
   width: 160px;
-  min-height: 180px;
+  min-height: 200px;
   background: var(--surface);
   border: 3px solid var(--border);
   border-radius: var(--radius);
@@ -181,14 +212,18 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 20px;
-  transition: border-color 0.15s;
+  gap: 10px;
+  padding: 20px 16px;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .player-card--joined {
   border-color: var(--player-color, var(--focus));
-  box-shadow: 0 0 16px -4px var(--player-color, var(--focus));
+  box-shadow: 0 0 20px -4px var(--player-color, var(--focus));
+}
+
+.player-card--empty {
+  opacity: 0.4;
 }
 
 .player-card__badge {
@@ -203,21 +238,35 @@ body {
   font-size: 1rem;
 }
 
-.player-card__name { font-weight: 700; text-align: center; }
-.player-card__hint { font-size: 0.8rem; color: var(--text-dim); text-align: center; }
+.player-card__profile {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.player-card__profile-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.player-card__name { font-weight: 700; text-align: center; font-size: 0.95rem; }
+.player-card__hint { font-size: 0.72rem; color: var(--text-dim); text-align: center; line-height: 1.4; }
+.player-card__hint--dim { opacity: 0.5; }
 
 .pairing-screen__hint {
   text-align: center;
   color: var(--text-dim);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
 }
 
 .pairing-screen__hint kbd {
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 0.85rem;
+  padding: 1px 5px;
+  font-size: 0.8rem;
 }
 
 .pairing-screen__actions {
@@ -358,6 +407,7 @@ body {
 /* ── Game screen ───────────────────────────────────────────── */
 .game-screen {
   padding: 0;
+  position: relative;
 }
 
 .game-screen__iframe {
@@ -367,10 +417,87 @@ body {
   display: block;
 }
 
-.game-screen--error {
+/* Loading / error overlays inside the game screen */
+.game-screen__loading,
+.game-screen__error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: var(--bg);
+  color: var(--text-dim);
+  z-index: 10;
+}
+
+.game-screen__error-msg {
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.game-screen--no-game {
   align-items: center;
   justify-content: center;
   gap: 24px;
+}
+
+/* ── Game quit overlay ─────────────────────────────────────── */
+.game-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  animation: screen-enter 0.1s ease-out both;
+}
+
+.game-overlay__box {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-width: 280px;
+}
+
+.game-overlay__title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.game-overlay__item {
+  width: 100%;
+  padding: 12px 20px;
+  background: transparent;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.1s, color 0.1s;
+}
+
+.game-overlay__item--active {
+  border-color: var(--focus);
+  color: var(--text);
+  box-shadow: 0 0 0 3px rgba(79, 157, 255, 0.25);
+}
+
+.game-overlay__hint {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 8px;
+  text-align: center;
 }
 
 /* ── Results screen ────────────────────────────────────────── */
