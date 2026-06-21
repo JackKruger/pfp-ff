@@ -1,6 +1,10 @@
 import type { GameManifest } from "@pfp/sdk";
 
 const raskullsEntry = import.meta.env.DEV ? "http://localhost:5174/" : "/games/raskulls/index.html";
+const pongEntry = import.meta.env.DEV ? "http://localhost:5175/" : "/games/pong/index.html";
+const spaceInvadersEntry = import.meta.env.DEV
+  ? "http://localhost:5176/"
+  : "/games/space-invaders/index.html";
 
 /** Local extension: tracks games that aren't implemented yet. */
 export interface GameEntry extends GameManifest {
@@ -32,14 +36,35 @@ export const GAMES: GameEntry[] = [
   {
     id: "pong",
     name: "Pong",
-    version: "0.0.0",
+    version: "0.1.0",
     engine: "web",
-    entry: "/games/pong/index.html",
+    entry: pongEntry,
     thumbnail: "/thumbnails/pong.png",
     players: { min: 2, max: 2 },
     sdk: "^1.0.0",
     tags: ["classic", "2-player"],
-    disabled: true,
+    statKeys: {
+      score: { label: "Score", scope: "player" },
+      durationMs: { label: "Duration", scope: "match" },
+    },
+  },
+  {
+    id: "space-invaders",
+    name: "Space Invaders",
+    version: "0.1.0",
+    engine: "web",
+    entry: spaceInvadersEntry,
+    players: { min: 1, max: 4 },
+    sdk: "^1.0.0",
+    tags: ["classic", "co-op", "arcade"],
+    statKeys: {
+      score: { label: "Score", scope: "player" },
+      aliensKilled: { label: "Aliens Killed", scope: "player" },
+      deaths: { label: "Deaths", scope: "player" },
+      waveReached: { label: "Wave Reached", scope: "match" },
+      totalAliensKilled: { label: "Total Aliens Killed", scope: "match" },
+      durationMs: { label: "Duration", scope: "match" },
+    },
   },
   {
     id: "stick-fight",

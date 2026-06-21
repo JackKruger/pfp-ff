@@ -6,17 +6,20 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 function copyBuiltGames(): Plugin {
+  const games = ["raskulls", "pong", "space-invaders"];
   return {
     name: "copy-built-games",
     closeBundle() {
-      const source = fileURLToPath(new URL("../../games/raskulls/dist", import.meta.url));
-      const target = fileURLToPath(new URL("./dist/games/raskulls", import.meta.url));
-      if (!existsSync(source)) {
-        throw new Error("Raskulls build missing; run `pnpm --filter @pfp/raskulls build` first.");
+      for (const id of games) {
+        const source = fileURLToPath(new URL(`../../games/${id}/dist`, import.meta.url));
+        const target = fileURLToPath(new URL(`./dist/games/${id}`, import.meta.url));
+        if (!existsSync(source)) {
+          throw new Error(`${id} build missing; run \`pnpm --filter @pfp/${id} build\` first.`);
+        }
+        rmSync(target, { recursive: true, force: true });
+        mkdirSync(dirname(target), { recursive: true });
+        cpSync(source, target, { recursive: true });
       }
-      rmSync(target, { recursive: true, force: true });
-      mkdirSync(dirname(target), { recursive: true });
-      cpSync(source, target, { recursive: true });
     },
   };
 }
