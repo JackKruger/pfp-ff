@@ -2,9 +2,13 @@ import Phaser from "phaser";
 import type { PlayerSlot } from "@pfp/sdk";
 import { TEXTURES } from "../assets.js";
 import { session } from "../session.js";
+import { chooseRaceBotActions } from "../systems/bot.js";
+import { hazardEffectForMode } from "../systems/hazards.js";
 import {
   TILE_SIZE,
   TerrainGrid,
+  type BlockDrop,
+  type GrayChainExplosion,
   type PickupKind,
   type Rect,
   type TileKind,
@@ -14,11 +18,55 @@ import type { PlayerStats, RankedPlayer, RaskullsMode, Vec2 } from "../systems/t
 
 const PLAYER_WIDTH = 26;
 const PLAYER_HEIGHT = 34;
-const RUN_SPEED = 220;
-const JUMP_SPEED = 500;
-const GRAVITY = 1450;
-const MAX_FALL_SPEED = 720;
-const DIG_COOLDOWN_MS = 180;
+const FRENZY_MAX_ENERGY = 100;
+const FRENZY_BOOSTIE_ENERGY = 35;
+const FRENZY_MIN_ACTIVATE = 30;
+
+interface ModeTuning {
+  runSpeed: number;
+  frenzyRunMultiplier: number;
+  jumpSpeed: number;
+  gravity: number;
+  maxFallSpeed: number;
+  wandCooldownMs: number;
+  frenzyDrainRate: number;
+  respawnStunMs: number;
+  frenzyHitStunMs: number;
+  overlapKnockbackX: number;
+  frenzyHitKnockbackX: number;
+  frenzyHitKnockbackY: number;
+}
+
+const MODE_TUNING: Record<RaskullsMode, ModeTuning> = {
+  race: {
+    runSpeed: 250,
+    frenzyRunMultiplier: 1.34,
+    jumpSpeed: 500,
+    gravity: 1420,
+    maxFallSpeed: 740,
+    wandCooldownMs: 160,
+    frenzyDrainRate: 34,
+    respawnStunMs: 260,
+    frenzyHitStunMs: 360,
+    overlapKnockbackX: 55,
+    frenzyHitKnockbackX: 240,
+    frenzyHitKnockbackY: 170,
+  },
+  arena: {
+    runSpeed: 220,
+    frenzyRunMultiplier: 1.28,
+    jumpSpeed: 500,
+    gravity: 1450,
+    maxFallSpeed: 720,
+    wandCooldownMs: 180,
+    frenzyDrainRate: 40,
+    respawnStunMs: 350,
+    frenzyHitStunMs: 650,
+    overlapKnockbackX: 90,
+    frenzyHitKnockbackX: 360,
+    frenzyHitKnockbackY: 260,
+  },
+};
 
 interface LevelSetup {
   grid: TerrainGrid;
@@ -40,11 +88,16 @@ export interface PlayPlayer extends PlayerSlot {
   lives: number;
   respawnAt: number;
   stunnedUntil: number;
-  dashUntil: number;
+  frenzyEnergy: number;
+  frenzyActive: boolean;
+  frenzyDrainRate: number;
+  frenzyTrailAt: number;
+  hazardReadyAt: number;
   shieldUntil: number;
   digReadyAt: number;
   lastHitBy: number | null;
-  powerup: Exclude<PickupKind, "gem"> | null;
+  powerup: Exclude<PickupKind, "gem" | "boostie"> | null;
+  bot: boolean;
   stats: PlayerStats;
   view: Phaser.GameObjects.Container;
   body: Phaser.GameObjects.Image;
@@ -82,7 +135,8 @@ export abstract class PlayScene extends Phaser.Scene {
 
     this.grid = setup.grid;
     this.starts = setup.starts;
-    this.players = context.players.map((player) => this.createPlayer(player, setup.lives));
+    const playerSlots = this.mode === "race" ? withRaceBots(context.players) : context.players;
+    this.players = playerSlots.map((player) => this.createPlayer(player, setup.lives));
     this.levelStartedAt = this.time.now;
     this.wallStartedAt = Date.now();
     this.ended = false;
@@ -113,8 +167,12 @@ export abstract class PlayScene extends Phaser.Scene {
     session.input.tick();
 
     const actionBySlot = new Map<number, PlayerActions>();
-    for (const player of this.players)
-      actionBySlot.set(player.slot, session.input.actionsFor(player));
+    for (const player of this.players) {
+      actionBySlot.set(
+        player.slot,
+        player.bot ? this.botActionsFor(player) : session.input.actionsFor(player),
+      );
+    }
 
     if (this.paused) {
       this.updatePaused(actionBySlot);
@@ -139,11 +197,15 @@ export abstract class PlayScene extends Phaser.Scene {
     session.input.commit();
   }
 
-  protected completeMatch(ranked: RankedPlayer[]): void {
+  protected completeMatch(
+    ranked: RankedPlayer[],
+    options: { levelName?: string; grandPrixFinal?: boolean } = {},
+  ): void {
     if (this.ended) return;
     this.ended = true;
     session.completed = {
       mode: this.mode,
+      ...options,
       startedAt: this.wallStartedAt,
       endedAt: Date.now(),
       ranked,
@@ -152,6 +214,18 @@ export abstract class PlayScene extends Phaser.Scene {
   }
 
   protected abstract hudText(): string;
+
+  protected canDig(_player: PlayPlayer): boolean {
+    return true;
+  }
+
+  protected onSuccessfulDig(_player: PlayPlayer, _destroyedCount: number): void {}
+
+  protected onPickupCollected(_player: PlayPlayer, _pickup: PickupKind): void {}
+
+  private get tuning(): ModeTuning {
+    return MODE_TUNING[this.mode];
+  }
 
   private createPlayer(slot: PlayerSlot, lives: number): PlayPlayer {
     const start = this.starts[slot.slot] ?? this.starts[0] ?? { x: 64, y: 64 };
@@ -197,11 +271,16 @@ export abstract class PlayScene extends Phaser.Scene {
       lives,
       respawnAt: 0,
       stunnedUntil: 0,
-      dashUntil: 0,
+      frenzyEnergy: 0,
+      frenzyActive: false,
+      frenzyDrainRate: this.tuning.frenzyDrainRate,
+      frenzyTrailAt: 0,
+      hazardReadyAt: 0,
       shieldUntil: 0,
       digReadyAt: 0,
       lastHitBy: null,
       powerup: null,
+      bot: isBotSlot(slot),
       stats: {
         blocksBroken: 0,
         gems: 0,
@@ -227,9 +306,11 @@ export abstract class PlayScene extends Phaser.Scene {
     const stunned = time < player.stunnedUntil;
     if (!stunned) {
       if (Math.abs(actions.moveX) > 0.15) player.facing = actions.moveX < 0 ? -1 : 1;
-      player.vx = actions.moveX * RUN_SPEED;
+      const runSpeed =
+        this.tuning.runSpeed * (player.frenzyActive ? this.tuning.frenzyRunMultiplier : 1);
+      player.vx = actions.moveX * runSpeed;
       if (actions.justJump && player.onGround) {
-        player.vy = -JUMP_SPEED;
+        player.vy = -this.tuning.jumpSpeed;
         player.onGround = false;
       }
       if (actions.justDig && time >= player.digReadyAt) this.dig(player, actions);
@@ -238,17 +319,37 @@ export abstract class PlayScene extends Phaser.Scene {
       player.vx *= 0.95;
     }
 
-    player.vy = Math.min(MAX_FALL_SPEED, player.vy + GRAVITY * dt);
+    this.updateFrenzy(player, dt, time);
+    player.vy = Math.min(this.tuning.maxFallSpeed, player.vy + this.tuning.gravity * dt);
     this.movePlayer(player, player.vx * dt, 0);
     this.movePlayer(player, 0, player.vy * dt);
     this.collectPickups(player);
 
-    if (
-      this.touchesTile(playerRect(player), "spikes") ||
-      player.y > this.grid.height * TILE_SIZE + 96
-    ) {
+    if (this.touchesTile(playerRect(player), "spikes")) {
+      this.applyHazard(player, time);
+    }
+
+    if (player.y > this.grid.height * TILE_SIZE + 96) {
       this.killPlayer(player, player.lastHitBy, time);
     }
+  }
+
+  private applyHazard(player: PlayPlayer, time: number): void {
+    if (time < player.hazardReadyAt) return;
+
+    const effect = hazardEffectForMode(this.mode);
+    if (effect.lethal) {
+      this.killPlayer(player, player.lastHitBy, time);
+      return;
+    }
+
+    player.vx *= effect.speedMultiplier;
+    player.vy = -effect.bounceY;
+    player.stunnedUntil = Math.max(player.stunnedUntil, time + effect.stunMs);
+    player.frenzyEnergy = Math.max(0, player.frenzyEnergy - effect.frenzyDrain);
+    if (player.frenzyEnergy <= 0) player.frenzyActive = false;
+    if (effect.clearPowerup) player.powerup = null;
+    player.hazardReadyAt = time + 700;
   }
 
   private dig(player: PlayPlayer, actions: PlayerActions): void {
@@ -265,19 +366,32 @@ export abstract class PlayScene extends Phaser.Scene {
     }
 
     const { tileX, tileY } = this.grid.worldToTile(targetX, targetY);
-    const result = this.grid.destroyTile(tileX, tileY);
-    if (!result.destroyed) return;
-    player.stats.blocksBroken += 1;
-    player.digReadyAt = this.time.now + DIG_COOLDOWN_MS;
-    this.redrawTile(tileX, tileY);
-    this.addBreakFlash(tileX, tileY);
+    if (!this.canDig(player)) {
+      this.addFailedHitFlash(tileX, tileY);
+      player.digReadyAt = this.time.now + this.tuning.wandCooldownMs;
+      return;
+    }
+
+    const destroyed = this.grid.destroyConnectedBlockGroup(tileX, tileY);
+    if (destroyed.length === 0) {
+      this.addFailedHitFlash(tileX, tileY);
+      player.digReadyAt = this.time.now + this.tuning.wandCooldownMs;
+      return;
+    }
+    player.stats.blocksBroken += destroyed.length;
+    player.digReadyAt = this.time.now + this.tuning.wandCooldownMs;
+    for (const tile of destroyed) {
+      this.redrawTile(tile.tileX, tile.tileY);
+      this.addBreakFlash(tile.tileX, tile.tileY);
+    }
+    this.onSuccessfulDig(player, destroyed.length);
+    this.settleBlocksAndResolveChains();
   }
 
   private usePower(player: PlayPlayer, time: number): void {
-    if (player.powerup === "dash") {
-      player.vx = player.facing * 620;
-      player.dashUntil = time + 340;
-      player.powerup = null;
+    if (!player.powerup && player.frenzyEnergy >= FRENZY_MIN_ACTIVATE) {
+      player.frenzyActive = true;
+      player.frenzyTrailAt = time;
     } else if (player.powerup === "bomb") {
       this.bomb(player);
       player.powerup = null;
@@ -287,19 +401,48 @@ export abstract class PlayScene extends Phaser.Scene {
     }
   }
 
+  private botActionsFor(player: PlayPlayer): PlayerActions {
+    const frontX = player.x + player.width / 2 + player.facing * TILE_SIZE;
+    const head = this.grid.worldToTile(frontX, player.y + player.height * 0.35);
+    const feet = this.grid.worldToTile(frontX, player.y + player.height * 0.82);
+    return chooseRaceBotActions({
+      blockedAhead:
+        this.grid.isSolid(head.tileX, head.tileY) || this.grid.isSolid(feet.tileX, feet.tileY),
+      onGround: player.onGround,
+      frenzyEnergy: player.frenzyEnergy,
+      hasPowerup: player.powerup !== null,
+    });
+  }
+
+  private updateFrenzy(player: PlayPlayer, dt: number, time: number): void {
+    if (!player.frenzyActive) return;
+
+    player.frenzyEnergy = Math.max(0, player.frenzyEnergy - player.frenzyDrainRate * dt);
+    if (time >= player.frenzyTrailAt) {
+      this.addFrenzyTrail(player);
+      player.frenzyTrailAt = time + 70;
+    }
+    if (player.frenzyEnergy <= 0) player.frenzyActive = false;
+  }
+
   private bomb(player: PlayPlayer): void {
     const frontX = player.x + player.width / 2 + player.facing * TILE_SIZE;
     const frontY = player.y + player.height / 2;
     const center = this.grid.worldToTile(frontX, frontY);
+    const destroyedKeys = new Set<string>();
     for (let y = center.tileY - 1; y <= center.tileY + 1; y++) {
       for (let x = center.tileX - 1; x <= center.tileX + 1; x++) {
-        const result = this.grid.destroyTile(x, y);
-        if (!result.destroyed) continue;
-        player.stats.blocksBroken += 1;
-        this.redrawTile(x, y);
-        this.addBreakFlash(x, y);
+        for (const tile of this.grid.destroyConnectedBlockGroup(x, y)) {
+          const key = `${tile.tileX},${tile.tileY}`;
+          if (destroyedKeys.has(key)) continue;
+          destroyedKeys.add(key);
+          player.stats.blocksBroken += 1;
+          this.redrawTile(tile.tileX, tile.tileY);
+          this.addBreakFlash(tile.tileX, tile.tileY);
+        }
       }
     }
+    if (destroyedKeys.size > 0) this.settleBlocksAndResolveChains();
   }
 
   private movePlayer(player: PlayPlayer, dx: number, dy: number): void {
@@ -338,8 +481,14 @@ export abstract class PlayScene extends Phaser.Scene {
     const pickups = this.grid.collectPickups(playerRect(player));
     for (const pickup of pickups) {
       this.redrawTile(pickup.tileX, pickup.tileY);
+      this.onPickupCollected(player, pickup.kind);
       if (pickup.kind === "gem") {
         player.stats.gems += 1;
+      } else if (pickup.kind === "boostie") {
+        player.frenzyEnergy = Math.min(
+          FRENZY_MAX_ENERGY,
+          player.frenzyEnergy + FRENZY_BOOSTIE_ENERGY,
+        );
       } else {
         player.powerup = pickup.kind;
       }
@@ -370,7 +519,7 @@ export abstract class PlayScene extends Phaser.Scene {
     player.vy = 0;
     player.alive = true;
     player.onGround = false;
-    player.stunnedUntil = this.time.now + 350;
+    player.stunnedUntil = this.time.now + this.tuning.respawnStunMs;
     player.view.setAlpha(1);
   }
 
@@ -388,18 +537,17 @@ export abstract class PlayScene extends Phaser.Scene {
   }
 
   private resolveHit(attacker: PlayPlayer, victim: PlayPlayer, time: number): void {
-    const attackerDashing = time < attacker.dashUntil;
-    if (!attackerDashing || time < victim.shieldUntil) {
+    if (!attacker.frenzyActive || time < victim.shieldUntil) {
       const direction = attacker.x < victim.x ? -1 : 1;
-      attacker.vx = direction * 90;
-      victim.vx = -direction * 90;
+      attacker.vx = direction * this.tuning.overlapKnockbackX;
+      victim.vx = -direction * this.tuning.overlapKnockbackX;
       return;
     }
 
     victim.lastHitBy = attacker.slot;
-    victim.stunnedUntil = time + 650;
-    victim.vx = attacker.facing * 360;
-    victim.vy = -260;
+    victim.stunnedUntil = time + this.tuning.frenzyHitStunMs;
+    victim.vx = attacker.facing * this.tuning.frenzyHitKnockbackX;
+    victim.vy = -this.tuning.frenzyHitKnockbackY;
   }
 
   private renderTerrain(): void {
@@ -434,6 +582,89 @@ export abstract class PlayScene extends Phaser.Scene {
     });
   }
 
+  private addFrenzyTrail(player: PlayPlayer): void {
+    const ghost = this.add.image(
+      player.x + player.width / 2,
+      player.y + player.height / 2,
+      TEXTURES.player,
+    );
+    ghost.setTint(Phaser.Display.Color.HexStringToColor(player.color).color);
+    ghost.setFlipX(player.facing < 0);
+    ghost.setAlpha(0.32);
+    ghost.setDepth(10);
+    this.tweens.add({
+      targets: ghost,
+      alpha: 0,
+      scale: 0.72,
+      duration: 180,
+      onComplete: () => ghost.destroy(),
+    });
+  }
+
+  private addFailedHitFlash(tileX: number, tileY: number): void {
+    const { x, y } = this.grid.tileToWorldCenter(tileX, tileY);
+    const fail = this.add.rectangle(x, y, TILE_SIZE - 4, TILE_SIZE - 4);
+    fail.setStrokeStyle(3, 0xf8fafc, 0.72);
+    fail.setDepth(31);
+    this.tweens.add({
+      targets: fail,
+      alpha: 0,
+      scale: 0.82,
+      duration: 130,
+      onComplete: () => fail.destroy(),
+    });
+  }
+
+  private settleBlocksAndResolveChains(): void {
+    this.animateBlockDrops(this.grid.settleBlockGravity());
+    this.animateGrayChainExplosions(this.grid.resolveGrayChainExplosions());
+  }
+
+  private animateBlockDrops(drops: BlockDrop[]): void {
+    if (drops.length === 0) return;
+
+    const changedKeys = new Set<string>();
+    for (const drop of drops) {
+      changedKeys.add(`${drop.fromX},${drop.fromY}`);
+      changedKeys.add(`${drop.toX},${drop.toY}`);
+    }
+
+    for (const key of changedKeys) {
+      this.tileSprites.get(key)?.destroy();
+      this.tileSprites.delete(key);
+    }
+
+    for (const drop of drops) {
+      const texture = textureForTile(drop.kind);
+      if (!texture) continue;
+
+      const from = this.grid.tileToWorldCenter(drop.fromX, drop.fromY);
+      const to = this.grid.tileToWorldCenter(drop.toX, drop.toY);
+      const sprite = this.add.image(from.x, from.y, texture);
+      sprite.setDepth(12);
+      this.tweens.add({
+        targets: sprite,
+        y: to.y,
+        duration: Math.min(260, 90 + (drop.toY - drop.fromY) * 42),
+        ease: "Quad.easeIn",
+        onComplete: () => {
+          sprite.destroy();
+          this.redrawTile(drop.toX, drop.toY);
+        },
+      });
+    }
+  }
+
+  private animateGrayChainExplosions(explosions: GrayChainExplosion[]): void {
+    for (const explosion of explosions) {
+      for (const tile of explosion.destroyed) {
+        this.redrawTile(tile.tileX, tile.tileY);
+        this.addBreakFlash(tile.tileX, tile.tileY);
+      }
+      this.animateBlockDrops(explosion.drops);
+    }
+  }
+
   private touchesTile(rect: Rect, tile: TileKind): boolean {
     const bounds = this.grid.rectTileBounds(rect);
     for (let y = bounds.minY; y <= bounds.maxY; y++) {
@@ -447,7 +678,7 @@ export abstract class PlayScene extends Phaser.Scene {
   private updatePlayerView(player: PlayPlayer, time: number): void {
     player.view.setPosition(player.x + player.width / 2, player.y + player.height / 2);
     player.body.setFlipX(player.facing < 0);
-    player.body.setScale(time < player.dashUntil ? 1.12 : 1);
+    player.body.setScale(player.frenzyActive ? 1.12 : 1);
     player.shieldView.setVisible(time < player.shieldUntil);
     player.powerText.setText(player.powerup ? player.powerup.toUpperCase() : "");
     player.label.setText(player.lives > 0 ? player.displayName : `${player.displayName} OUT`);
@@ -545,10 +776,24 @@ function textureForTile(kind: TileKind): string | null {
       return TEXTURES.stone;
     case "crate":
       return TEXTURES.crate;
+    case "redBlock":
+      return TEXTURES.redBlock;
+    case "blueBlock":
+      return TEXTURES.blueBlock;
+    case "yellowBlock":
+      return TEXTURES.yellowBlock;
+    case "greenBlock":
+      return TEXTURES.greenBlock;
+    case "grayBlock":
+      return TEXTURES.grayBlock;
+    case "steel":
+      return TEXTURES.stone;
     case "gem":
       return TEXTURES.gem;
+    case "boostie":
+      return TEXTURES.boostie;
     case "dash":
-      return TEXTURES.dash;
+      return TEXTURES.boostie;
     case "bomb":
       return TEXTURES.bomb;
     case "shield":
@@ -574,3 +819,27 @@ function playerRect(player: PlayPlayer): Rect {
 function rectsOverlap(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 }
+
+function withRaceBots(players: PlayerSlot[]): PlayerSlot[] {
+  if (players.length >= 4) return players;
+
+  const usedSlots = new Set(players.map((player) => player.slot));
+  const filled = [...players];
+  for (let slot = 0; slot < 4 && filled.length < 4; slot++) {
+    if (usedSlots.has(slot)) continue;
+    filled.push({
+      slot,
+      profileId: `bot-${slot}`,
+      displayName: `Bot ${slot + 1}`,
+      color: BOT_COLORS[slot] ?? "#e5e7eb",
+      gamepadIndex: -1,
+    });
+  }
+  return filled.sort((a, b) => a.slot - b.slot);
+}
+
+function isBotSlot(player: PlayerSlot): boolean {
+  return player.profileId?.startsWith("bot-") ?? false;
+}
+
+const BOT_COLORS = ["#ef4444", "#3b82f6", "#22c55e", "#f97316"] as const;

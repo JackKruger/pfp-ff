@@ -35,31 +35,31 @@ Goal: move `games/raskulls` from a lightweight Raskulls-inspired prototype towar
 
 ### Phase 1 — Core block system
 
-- [ ] Replace the current `dirt`/`crate` block model with color-aware Raskulls blocks.
+- [x] Replace the current `dirt`/`crate` block model with color-aware Raskulls blocks.
   - Files: `games/raskulls/src/systems/terrain.ts`, `games/raskulls/src/assets.ts`, `games/raskulls/test/terrain.test.ts`
   - Add tile kinds for colored blocks, gray blocks, steel/indestructible blocks, hazards, pickups, and finish tiles.
   - Store block color/type metadata in structured terrain cells instead of a flat `TileKind` string when needed.
   - Keep a compatibility adapter only if it avoids rewriting every scene in one pass.
 
-- [ ] Implement gravity for unsupported blocks after a wand break.
+- [x] Implement gravity for unsupported blocks after a wand break.
   - Files: `games/raskulls/src/systems/terrain.ts`, `games/raskulls/src/scenes/PlayScene.ts`
   - After destroying a block, scan each affected column and drop floating block groups into empty cells.
   - Animate the drop in `PlayScene` after the terrain state changes, instead of instantly redrawing the whole grid.
   - Add tests for single-block drops, stacked drops, and blocks stopped by solid terrain.
 
-- [ ] Implement same-color block merging.
+- [x] Implement same-color block merging.
   - Files: `games/raskulls/src/systems/terrain.ts`, `games/raskulls/test/terrain.test.ts`
   - After gravity resolves, flood-fill adjacent same-color blocks.
   - Represent merged groups as one logical block group, or simulate merging by clearing matching blocks together when struck.
   - Add tests for horizontal, vertical, and L-shaped color groups.
 
-- [ ] Implement gray-block chain explosions.
+- [x] Implement gray-block chain explosions.
   - Files: `games/raskulls/src/systems/terrain.ts`, `games/raskulls/src/scenes/PlayScene.ts`, `games/raskulls/test/terrain.test.ts`
   - Detect connected gray groups of four or more after gravity/merge resolution.
   - Clear the entire connected gray group and trigger break effects for each tile.
   - Re-run gravity and chain detection until no more explosions are possible.
 
-- [ ] Change wand breaking from "one adjacent tile" to source-like block/group breaking.
+- [x] Change wand breaking from "one adjacent tile" to source-like block/group breaking.
   - Files: `games/raskulls/src/scenes/PlayScene.ts`, `games/raskulls/src/systems/terrain.ts`
   - Keep directional targeting: forward, up, and down.
   - When the target is a merged group, break the whole group.
@@ -67,20 +67,20 @@ Goal: move `games/raskulls` from a lightweight Raskulls-inspired prototype towar
 
 ### Phase 2 — Frenzy and pacing
 
-- [ ] Replace the one-shot `dash` pickup with Boosties and a Frenzy meter.
+- [x] Replace the one-shot `dash` pickup with Boosties and a Frenzy meter.
   - Files: `games/raskulls/src/systems/types.ts`, `games/raskulls/src/scenes/PlayScene.ts`, `games/raskulls/src/scenes/RaceScene.ts`, `games/raskulls/src/assets.ts`
   - Track `frenzyEnergy`, `frenzyActive`, and `frenzyDrainRate` per player.
   - Collecting Boosties fills the meter.
   - Pressing the power button activates Frenzy when the meter is above the minimum threshold.
   - While active, increase run speed and acceleration, drain energy, and add a visual trail.
 
-- [ ] Tune movement around racing, not arena fighting.
+- [x] Tune movement around racing, not arena fighting.
   - Files: `games/raskulls/src/scenes/PlayScene.ts`
   - Split normal run speed, Frenzy speed, jump strength, fall speed, stun time, and collision knockback into named mode-tuning constants.
   - Add race-first tuning: fast horizontal response, short stun windows, and low punishment for hazards.
   - Keep values easy to tune from one object rather than scattered constants.
 
-- [ ] Change hazards from lethal by default to slowdown/bonus loss in race modes.
+- [x] Change hazards from lethal by default to slowdown/bonus loss in race modes.
   - Files: `games/raskulls/src/scenes/PlayScene.ts`
   - Lava/spikes should usually slow, bounce, drain Frenzy, or remove held powerups.
   - Reserve actual elimination/lives behavior for any explicit battle-style mode.
@@ -88,18 +88,18 @@ Goal: move `games/raskulls` from a lightweight Raskulls-inspired prototype towar
 
 ### Phase 3 — Original-style race and challenge modes
 
-- [ ] Replace the current single `Race` level with a level catalog.
+- [x] Replace the current single `Race` level with a level catalog.
   - Files: `games/raskulls/src/systems/levels.ts`, `games/raskulls/src/scenes/RaceScene.ts`
   - Define a `LevelDefinition` format with name, mode type, terrain layout, starts, finish/objectives, time limit, pickup placement, and hazard rules.
   - Start with three race tracks that exercise core block mechanics: simple dig race, vertical dig climb, and gray-chain shortcut route.
 
-- [ ] Add a Grand Prix-style playlist flow.
+- [x] Add a Grand Prix-style playlist flow.
   - Files: `games/raskulls/src/scenes/ModeSelectScene.ts`, `games/raskulls/src/scenes/ResultsScene.ts`, `games/raskulls/src/session.ts`
   - Queue multiple levels.
   - Award points per race placement.
   - Show standings between rounds and final results after the playlist.
 
-- [ ] Add challenge variants inspired by the original game.
+- [x] Add challenge variants inspired by the original game.
   - Files: `games/raskulls/src/systems/levels.ts`, new scene or mode logic under `games/raskulls/src/scenes/`
   - Priority variants:
     - Time Trial: fastest finish wins.
@@ -108,7 +108,7 @@ Goal: move `games/raskulls` from a lightweight Raskulls-inspired prototype towar
     - Frenzy Run: keep Frenzy active by chaining Boosties.
   - Implement these as objective rules over the same core `PlayScene`, not as four fully separate engines.
 
-- [ ] Add optional bot players for quick race fills.
+- [x] Add optional bot players for quick race fills.
   - Files: `games/raskulls/src/scenes/PlayScene.ts`, new AI helper under `games/raskulls/src/systems/`
   - Start with simple path-following and dig-if-blocked behavior.
   - Bots only need to be competent enough to pressure solo players during testing.

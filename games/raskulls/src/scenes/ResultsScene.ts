@@ -1,6 +1,11 @@
 import Phaser from "phaser";
 import { buildGameResult } from "../systems/result.js";
 import { session } from "../session.js";
+import {
+  advanceGrandPrixRound,
+  hasNextGrandPrixRound,
+  rankGrandPrix,
+} from "../systems/playlist.js";
 
 export class ResultsScene extends Phaser.Scene {
   private sent = false;
@@ -18,7 +23,16 @@ export class ResultsScene extends Phaser.Scene {
       return;
     }
 
-    this.add.text(54, 42, completed.mode === "race" ? "Race Results" : "Arena Results", {
+    const grandPrix = session.grandPrix;
+    const title = grandPrix
+      ? completed.grandPrixFinal
+        ? "Grand Prix Results"
+        : `${completed.levelName ?? "Race"} Results`
+      : completed.mode === "race"
+        ? "Race Results"
+        : "Arena Results";
+
+    this.add.text(54, 42, title, {
       fontFamily: "Segoe UI, sans-serif",
       fontSize: "42px",
       fontStyle: "800",
@@ -44,6 +58,31 @@ export class ResultsScene extends Phaser.Scene {
       });
     });
 
+    if (grandPrix && !completed.grandPrixFinal) {
+      const standings = rankGrandPrix(grandPrix);
+      this.add.text(54, 430, "Grand Prix Standings", {
+        fontFamily: "Segoe UI, sans-serif",
+        fontSize: "20px",
+        fontStyle: "700",
+        color: "#facc15",
+      });
+      this.add.text(
+        54,
+        462,
+        standings
+          .map((standing) => {
+            const player = context.players.find((candidate) => candidate.slot === standing.slot);
+            return `${standing.rank}. ${player?.displayName ?? `P${standing.slot + 1}`} ${standing.score} pts`;
+          })
+          .join("   "),
+        {
+          fontFamily: "Segoe UI, sans-serif",
+          fontSize: "16px",
+          color: "#cbd5e1",
+        },
+      );
+    }
+
     this.time.delayedCall(2400, () => this.sendResult());
   }
 
@@ -63,6 +102,15 @@ export class ResultsScene extends Phaser.Scene {
     const context = session.context;
     if (!completed || !context) return;
     this.sent = true;
+
+    const grandPrix = session.grandPrix;
+    if (grandPrix && !completed.grandPrixFinal && hasNextGrandPrixRound(grandPrix)) {
+      advanceGrandPrixRound(grandPrix);
+      session.completed = null;
+      this.scene.start("RaceScene");
+      return;
+    }
+
     session.client.gameOver(
       buildGameResult({
         sessionId: context.sessionId,

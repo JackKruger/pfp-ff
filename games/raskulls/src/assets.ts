@@ -5,7 +5,13 @@ export const TEXTURES = {
   dirt: "raskulls-dirt",
   stone: "raskulls-stone",
   crate: "raskulls-crate",
+  redBlock: "raskulls-block-red",
+  blueBlock: "raskulls-block-blue",
+  yellowBlock: "raskulls-block-yellow",
+  greenBlock: "raskulls-block-green",
+  grayBlock: "raskulls-block-gray",
   gem: "raskulls-gem",
+  boostie: "raskulls-boostie",
   dash: "raskulls-dash",
   bomb: "raskulls-bomb",
   shield: "raskulls-shield",
@@ -18,7 +24,13 @@ export function createCodeTextures(scene: Phaser.Scene): void {
   createBlock(scene, TEXTURES.dirt, 0x7a4b2a, 0xb6753c, 0x3c2415);
   createBlock(scene, TEXTURES.stone, 0x51586c, 0x798197, 0x252b38);
   createBlock(scene, TEXTURES.crate, 0x9b5d25, 0xd18a3d, 0x4d2a12);
+  createBlock(scene, TEXTURES.redBlock, 0xdc2626, 0xf87171, 0x7f1d1d);
+  createBlock(scene, TEXTURES.blueBlock, 0x2563eb, 0x60a5fa, 0x1e3a8a);
+  createBlock(scene, TEXTURES.yellowBlock, 0xeab308, 0xfde047, 0x854d0e);
+  createBlock(scene, TEXTURES.greenBlock, 0x16a34a, 0x4ade80, 0x14532d);
+  createBlock(scene, TEXTURES.grayBlock, 0x6b7280, 0xd1d5db, 0x374151);
   createGem(scene);
+  createBoostie(scene);
   createDash(scene);
   createBomb(scene);
   createShield(scene);
@@ -82,6 +94,19 @@ function createGem(scene: Phaser.Scene): void {
   g.fillStyle(0xf0fdff, 0.65);
   g.fillTriangle(16, 4, 26, 14, 15, 14);
   g.generateTexture(TEXTURES.gem, 32, 32);
+  g.destroy();
+}
+
+function createBoostie(scene: Phaser.Scene): void {
+  if (scene.textures.exists(TEXTURES.boostie)) return;
+  const g = scene.add.graphics();
+  g.fillStyle(0xfef08a, 1);
+  g.fillCircle(16, 16, 11);
+  g.fillStyle(0xf97316, 1);
+  g.fillCircle(16, 16, 6);
+  g.lineStyle(3, 0xffffff, 0.82);
+  g.strokeCircle(16, 16, 13);
+  g.generateTexture(TEXTURES.boostie, 32, 32);
   g.destroy();
 }
 

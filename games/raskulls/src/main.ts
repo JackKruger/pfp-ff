@@ -3,6 +3,8 @@ import "./style.css";
 import { session } from "./session.js";
 import { BootScene } from "./scenes/BootScene.js";
 import { ModeSelectScene } from "./scenes/ModeSelectScene.js";
+import { ChallengeSelectScene } from "./scenes/ChallengeSelectScene.js";
+import { ChallengeScene } from "./scenes/ChallengeScene.js";
 import { RaceScene } from "./scenes/RaceScene.js";
 import { ArenaScene } from "./scenes/ArenaScene.js";
 import { ResultsScene } from "./scenes/ResultsScene.js";
@@ -17,7 +19,15 @@ const game = new Phaser.Game({
     width: 960,
     height: 540,
   },
-  scene: [BootScene, ModeSelectScene, RaceScene, ArenaScene, ResultsScene],
+  scene: [
+    BootScene,
+    ModeSelectScene,
+    ChallengeSelectScene,
+    RaceScene,
+    ChallengeScene,
+    ArenaScene,
+    ResultsScene,
+  ],
 });
 
 session.client.onTerminate(() => game.destroy(true));
