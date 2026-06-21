@@ -38,6 +38,7 @@ client.onResume(() => {
 client.onTerminate(() => {
   cancelAnimationFrame(raf);
   input.dispose();
+  audio.dispose();
   client.dispose();
 });
 
@@ -71,10 +72,7 @@ function loop(now: number): void {
       state.events.length = 0;
     }
 
-    // Saucer looping sound
-    if (state.saucer && state.saucerSound) {
-      audio.playAll(["saucerLoop"]);
-    }
+    audio.setSaucerActive(Boolean(state.saucer && state.saucerSound));
 
     if (standings && !reported) {
       reported = true;

@@ -7,6 +7,7 @@ import type { SoundKind } from "./game.js";
 export class SIAudio {
   private ctx: AudioContext | null = null;
   private saucerOsc: OscillatorNode | null = null;
+  private saucerLfo: OscillatorNode | null = null;
 
   private ensure(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext();
@@ -19,19 +20,21 @@ export class SIAudio {
     this.ensure();
   }
 
+  setSaucerActive(active: boolean): void {
+    if (active) this.startSaucer();
+    else this.stopSaucer();
+  }
+
+  dispose(): void {
+    this.stopSaucer();
+    void this.ctx?.close();
+    this.ctx = null;
+  }
+
   playAll(events: SoundKind[]): void {
-    let saucerActive = false;
     for (const e of events) {
-      if (e === "saucerLoop") {
-        saucerActive = true;
-        continue;
-      }
+      if (e === "saucerLoop") continue;
       this.play(e);
-    }
-    if (saucerActive) {
-      this.startSaucer();
-    } else {
-      this.stopSaucer();
     }
   }
 
@@ -103,26 +106,23 @@ export class SIAudio {
     lfo.start();
 
     this.saucerOsc = osc;
+    this.saucerLfo = lfo;
   }
 
   private stopSaucer(): void {
-    if (this.saucerOsc) {
+    for (const osc of [this.saucerOsc, this.saucerLfo]) {
+      if (!osc) continue;
       try {
-        this.saucerOsc.stop();
+        osc.stop();
       } catch {
         /* already stopped */
       }
-      this.saucerOsc = null;
     }
+    this.saucerOsc = null;
+    this.saucerLfo = null;
   }
 
-  private beep(
-    freq: number,
-    durMs: number,
-    type: OscillatorType,
-    gain: number,
-    delayMs = 0,
-  ): void {
+  private beep(freq: number, durMs: number, type: OscillatorType, gain: number, delayMs = 0): void {
     const ctx = this.ensure();
     const t0 = ctx.currentTime + delayMs / 1000;
     const osc = ctx.createOscillator();

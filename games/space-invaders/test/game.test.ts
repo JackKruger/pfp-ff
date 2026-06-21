@@ -89,6 +89,26 @@ function startFrame(playerCount: number = 1): InputFrame {
 // =============================================================================
 
 describe("ship movement", () => {
+  it("spawns multiplayer ships in separate lanes", () => {
+    const s = createGame(ctx(4));
+    const xs = s.players.map((player) => player.x);
+    expect(new Set(xs).size).toBe(4);
+    expect(xs).toEqual([...xs].sort((a, b) => a - b));
+  });
+
+  it("respawns a ship at its assigned lane", () => {
+    const s = playingState(3);
+    const spawnX = s.players[1]!.spawnX;
+    s.players[1]!.x = 0;
+    s.players[1]!.respawnTimer = 20;
+    s.players[1]!.lives = 2;
+
+    advance(s, 20, idleFrame(3));
+
+    expect(s.players[1]!.x).toBe(spawnX);
+    expect(s.players[1]!.respawnTimer).toBe(0);
+  });
+
   it("moves right when axis is positive", () => {
     const s = playingState(1);
     const startX = s.players[0]!.x;
@@ -943,8 +963,7 @@ describe("alien shooting column selection", () => {
     // Should have one new bullet from col 0, fired from row 2's position
     expect(s.alienBullets.length).toBe(1);
     if (s.alienBullets[0]) {
-      const expectedY =
-        s.alienGridY + 2 * (ALIEN_H + ALIEN_GAP_Y) + ALIEN_H / 2 + ALIEN_H / 2;
+      const expectedY = s.alienGridY + 2 * (ALIEN_H + ALIEN_GAP_Y) + ALIEN_H / 2 + ALIEN_H / 2;
       expect(s.alienBullets[0].y).toBeCloseTo(expectedY, 0);
     }
   });

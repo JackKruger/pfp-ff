@@ -91,6 +91,7 @@ export interface ShipState {
   displayName: string;
   color: string;
   gamepadIndex: number;
+  spawnX: number;
   x: number;
   score: number;
   aliensKilled: number;
@@ -184,14 +185,24 @@ export interface InputFrame {
   anyStart: boolean;
 }
 
-function makeShip(p: LaunchContext["players"][number]): ShipState {
+function shipSpawnX(index: number, playerCount: number): number {
+  return (ARENA_W * (index + 1)) / (playerCount + 1);
+}
+
+function makeShip(
+  p: LaunchContext["players"][number],
+  index: number,
+  playerCount: number,
+): ShipState {
+  const spawnX = shipSpawnX(index, playerCount);
   return {
     slot: p.slot,
     profileId: p.profileId,
     displayName: p.displayName,
     color: p.color,
     gamepadIndex: p.gamepadIndex,
-    x: ARENA_W / 2,
+    spawnX,
+    x: spawnX,
     score: 0,
     aliensKilled: 0,
     shotsFired: 0,
@@ -277,7 +288,7 @@ export function spawnWave(state: GameState): void {
   // Respawn dead players who still have lives
   for (const p of state.players) {
     if (p.lives > 0 && p.respawnTimer > 0) {
-      p.x = ARENA_W / 2;
+      p.x = p.spawnX;
       p.respawnTimer = 0;
       p.invincibleTimer = SHIP_INVINCIBLE_MS;
       p.shootCooldown = 0;
@@ -287,7 +298,7 @@ export function spawnWave(state: GameState): void {
 }
 
 function respawnPlayer(p: ShipState): void {
-  p.x = ARENA_W / 2;
+  p.x = p.spawnX;
   p.respawnTimer = 0;
   p.invincibleTimer = SHIP_INVINCIBLE_MS;
   p.shootCooldown = 0;
@@ -297,7 +308,9 @@ function respawnPlayer(p: ShipState): void {
 export function createGame(context: LaunchContext): GameState {
   const shields = makeShields();
   return {
-    players: context.players.map(makeShip),
+    players: context.players.map((player, index) =>
+      makeShip(player, index, context.players.length),
+    ),
     aliens: [],
     alienGridX: ALIEN_GRID_START_X,
     alienGridY: ALIEN_GRID_START_Y,
@@ -533,12 +546,7 @@ export function stepFixed(state: GameState): void {
       if (p.respawnTimer > 0) continue; // dead/respawning
       const shipLeft = p.x - SHIP_W / 2;
       const shipRight = p.x + SHIP_W / 2;
-      if (
-        bx >= shipLeft &&
-        bx <= shipRight &&
-        by >= SHIP_Y &&
-        by <= SHIP_Y + SHIP_H
-      ) {
+      if (bx >= shipLeft && bx <= shipRight && by >= SHIP_Y && by <= SHIP_Y + SHIP_H) {
         if (p.invincibleTimer > 0) {
           // Invincible — bullet passes through
           continue;

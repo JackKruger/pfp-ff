@@ -60,10 +60,13 @@ export const GAMES: GameEntry[] = [
     statKeys: {
       score: { label: "Score", scope: "player" },
       aliensKilled: { label: "Aliens Killed", scope: "player" },
+      shotsFired: { label: "Shots Fired", scope: "player" },
+      accuracy: { label: "Accuracy", scope: "player" },
       deaths: { label: "Deaths", scope: "player" },
       waveReached: { label: "Wave Reached", scope: "match" },
       totalAliensKilled: { label: "Total Aliens Killed", scope: "match" },
       durationMs: { label: "Duration", scope: "match" },
+      survived: { label: "Survived", scope: "match" },
     },
   },
   {

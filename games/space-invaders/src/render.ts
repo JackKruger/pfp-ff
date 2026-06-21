@@ -105,7 +105,7 @@ function drawScanlines(ctx: CanvasRenderingContext2D, ch: number, scale: number,
   ctx.fillStyle = "rgba(0, 0, 0, 0.06)";
   const lineH = 2 / scale;
   for (let y = -oy / scale; y < ch / scale; y += lineH * 2) {
-    ctx.fillRect(0, y * scale + oy * scale, 9999, lineH * scale);
+    ctx.fillRect(0, y * scale + oy, 9999, lineH * scale);
   }
   ctx.restore();
 }
@@ -145,9 +145,7 @@ function drawShips(ctx: CanvasRenderingContext2D, state: GameState): void {
   for (const p of state.players) {
     if (p.respawnTimer > 0) continue;
 
-    const alpha = p.invincibleTimer > 0
-      ? (Math.sin(state.attractBlink * 0.018) > 0 ? 1 : 0.15)
-      : 1;
+    const alpha = p.invincibleTimer > 0 ? (Math.sin(state.attractBlink * 0.018) > 0 ? 1 : 0.15) : 1;
 
     ctx.globalAlpha = alpha;
     const cx = p.x;
@@ -272,31 +270,213 @@ function drawAlienShape(
 
   if (row === 0) {
     // Squid — top row
-    const body: [number, number][] = frame === 0
-      ? [[0,1],[6,1],[1,0],[2,0],[4,0],[5,0],[0,2],[1,2],[2,2],[4,2],[5,2],[6,2],[1,3],[2,3],[4,3],[5,3],[0,4],[2,4],[4,4],[6,4],[1,5],[3,5],[5,5],[0,6],[2,6],[4,6],[6,6]]
-      : [[1,1],[5,1],[0,0],[3,0],[6,0],[0,2],[1,2],[2,2],[4,2],[5,2],[6,2],[0,3],[2,3],[4,3],[6,3],[1,4],[3,4],[5,4],[0,5],[2,5],[4,5],[6,5],[1,6],[3,6],[5,6]];
+    const body: [number, number][] =
+      frame === 0
+        ? [
+            [0, 1],
+            [6, 1],
+            [1, 0],
+            [2, 0],
+            [4, 0],
+            [5, 0],
+            [0, 2],
+            [1, 2],
+            [2, 2],
+            [4, 2],
+            [5, 2],
+            [6, 2],
+            [1, 3],
+            [2, 3],
+            [4, 3],
+            [5, 3],
+            [0, 4],
+            [2, 4],
+            [4, 4],
+            [6, 4],
+            [1, 5],
+            [3, 5],
+            [5, 5],
+            [0, 6],
+            [2, 6],
+            [4, 6],
+            [6, 6],
+          ]
+        : [
+            [1, 1],
+            [5, 1],
+            [0, 0],
+            [3, 0],
+            [6, 0],
+            [0, 2],
+            [1, 2],
+            [2, 2],
+            [4, 2],
+            [5, 2],
+            [6, 2],
+            [0, 3],
+            [2, 3],
+            [4, 3],
+            [6, 3],
+            [1, 4],
+            [3, 4],
+            [5, 4],
+            [0, 5],
+            [2, 5],
+            [4, 5],
+            [6, 5],
+            [1, 6],
+            [3, 6],
+            [5, 6],
+          ];
     // Eyes
-    const eyes: [number, number][] = frame === 0 ? [[2,1],[4,1]] : [[1,1],[5,1]];
+    const eyes: [number, number][] =
+      frame === 0
+        ? [
+            [2, 1],
+            [4, 1],
+          ]
+        : [
+            [1, 1],
+            [5, 1],
+          ];
     for (const [px, py] of body) {
       const isEye = eyes.some(([ex, ey]) => ex === px && ey === py);
       pixels.push([px, py, isEye ? light : color]);
     }
   } else if (row <= 2) {
     // Crab
-    const body: [number, number][] = frame === 0
-      ? [[0,0],[1,0],[2,0],[4,0],[5,0],[6,0],[2,1],[4,1],[0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],[0,3],[2,3],[4,3],[6,3],[1,4],[2,4],[4,4],[5,4],[3,5],[1,6],[5,6]]
-      : [[1,0],[2,0],[4,0],[5,0],[2,1],[4,1],[0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],[0,3],[2,3],[4,3],[6,3],[0,4],[1,4],[3,4],[5,4],[6,4],[2,5],[4,5],[1,6],[3,6],[5,6]];
-    const eyes: [number, number][] = [[2,0],[4,0]];
+    const body: [number, number][] =
+      frame === 0
+        ? [
+            [0, 0],
+            [1, 0],
+            [2, 0],
+            [4, 0],
+            [5, 0],
+            [6, 0],
+            [2, 1],
+            [4, 1],
+            [0, 2],
+            [1, 2],
+            [2, 2],
+            [3, 2],
+            [4, 2],
+            [5, 2],
+            [6, 2],
+            [0, 3],
+            [2, 3],
+            [4, 3],
+            [6, 3],
+            [1, 4],
+            [2, 4],
+            [4, 4],
+            [5, 4],
+            [3, 5],
+            [1, 6],
+            [5, 6],
+          ]
+        : [
+            [1, 0],
+            [2, 0],
+            [4, 0],
+            [5, 0],
+            [2, 1],
+            [4, 1],
+            [0, 2],
+            [1, 2],
+            [2, 2],
+            [3, 2],
+            [4, 2],
+            [5, 2],
+            [6, 2],
+            [0, 3],
+            [2, 3],
+            [4, 3],
+            [6, 3],
+            [0, 4],
+            [1, 4],
+            [3, 4],
+            [5, 4],
+            [6, 4],
+            [2, 5],
+            [4, 5],
+            [1, 6],
+            [3, 6],
+            [5, 6],
+          ];
+    const eyes: [number, number][] = [
+      [2, 0],
+      [4, 0],
+    ];
     for (const [px, py] of body) {
       const isEye = eyes.some(([ex, ey]) => ex === px && ey === py);
       pixels.push([px, py, isEye ? light : color]);
     }
   } else {
     // Octopus
-    const body: [number, number][] = frame === 0
-      ? [[0,0],[6,0],[1,1],[5,1],[0,2],[1,2],[2,2],[4,2],[5,2],[6,2],[0,3],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[1,4],[3,4],[5,4],[0,5],[2,5],[4,5],[6,5],[1,6],[5,6]]
-      : [[1,0],[5,0],[0,1],[6,1],[0,2],[2,2],[3,2],[4,2],[6,2],[0,3],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[0,4],[2,4],[4,4],[6,4],[1,5],[3,5],[5,5],[0,6],[2,6],[4,6],[6,6]];
-    const eyes: [number, number][] = [[1,1],[5,1]];
+    const body: [number, number][] =
+      frame === 0
+        ? [
+            [0, 0],
+            [6, 0],
+            [1, 1],
+            [5, 1],
+            [0, 2],
+            [1, 2],
+            [2, 2],
+            [4, 2],
+            [5, 2],
+            [6, 2],
+            [0, 3],
+            [1, 3],
+            [2, 3],
+            [3, 3],
+            [4, 3],
+            [5, 3],
+            [6, 3],
+            [1, 4],
+            [3, 4],
+            [5, 4],
+            [0, 5],
+            [2, 5],
+            [4, 5],
+            [6, 5],
+            [1, 6],
+            [5, 6],
+          ]
+        : [
+            [1, 0],
+            [5, 0],
+            [0, 1],
+            [6, 1],
+            [0, 2],
+            [2, 2],
+            [3, 2],
+            [4, 2],
+            [6, 2],
+            [0, 3],
+            [1, 3],
+            [2, 3],
+            [3, 3],
+            [4, 3],
+            [5, 3],
+            [6, 3],
+            [0, 4],
+            [2, 4],
+            [4, 4],
+            [6, 4],
+            [1, 5],
+            [3, 5],
+            [5, 5],
+            [0, 6],
+            [2, 6],
+            [4, 6],
+            [6, 6],
+          ];
+    const eyes: [number, number][] = [
+      [1, 1],
+      [5, 1],
+    ];
     for (const [px, py] of body) {
       const isEye = eyes.some(([ex, ey]) => ex === px && ey === py);
       pixels.push([px, py, isEye ? light : color]);
@@ -357,12 +537,7 @@ function drawShields(ctx: CanvasRenderingContext2D, state: GameState): void {
         const edge = Math.min(distX / 2, distY / 2);
         const alpha = 0.3 + edge * 0.25;
         ctx.fillStyle = `rgba(6, 182, 212, ${alpha.toFixed(2)})`;
-        ctx.fillRect(
-          shield.x + cx * cellW + 1,
-          shield.y + cy * cellH + 1,
-          cellW - 2,
-          cellH - 2,
-        );
+        ctx.fillRect(shield.x + cx * cellW + 1, shield.y + cy * cellH + 1, cellW - 2, cellH - 2);
       }
     }
   }
