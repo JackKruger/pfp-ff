@@ -1,13 +1,14 @@
 import { GameCard } from "../components/GameCard.js";
 import { Btn } from "../components/Btn.js";
 import { GAMES } from "../games.js";
+import type { GameEntry } from "../games.js";
 import { useShell } from "../store.js";
-import type { GameManifest } from "@pfp/sdk";
 
 export function HomeScreen() {
   const { navigate, selectGame } = useShell();
 
-  function handleSelectGame(game: GameManifest) {
+  function handleSelectGame(game: GameEntry) {
+    if (game.disabled) return;
     selectGame(game);
     navigate("pairing");
   }
@@ -31,6 +32,7 @@ export function HomeScreen() {
           <GameCard
             key={game.id}
             game={game}
+            disabled={game.disabled}
             onSelect={() => handleSelectGame(game)}
             autoFocus={i === 0}
           />

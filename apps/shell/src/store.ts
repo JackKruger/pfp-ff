@@ -78,6 +78,7 @@ export const useShell = create<ShellState>((set, get) => ({
   },
 
   async recordMatch(result) {
+    // Store the match under its ending timestamp (playedAt ≈ completedAt).
     const record = await dataStore.recordMatch({
       gameId: result.gameId,
       playedAt: result.endedAt,

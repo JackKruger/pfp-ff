@@ -19,6 +19,9 @@ export function PairingScreen() {
   const unclaimedCountRef = useRef(0);
   const [unclaimedCount, setUnclaimedCount] = useState(0);
 
+  // Tracks the most recently joined / toggled keyboard slot for profile cycling.
+  const lastKeyboardSlotRef = useRef<number>(0);
+
   // Keep a stable ref to profiles so the tick handler always reads the latest list.
   const profilesRef = useRef(profiles);
   useEffect(() => {
@@ -62,10 +65,12 @@ export function PairingScreen() {
     const toggleKeyboardSlot = (slot: number) => {
       if (keyboardSlotsRef.current.some((joined) => joined.slot === slot)) removeKeyboardSlot(slot);
       else joinKeyboardSlot(slot);
+      lastKeyboardSlotRef.current = slot;
     };
 
     const cycleKeyboardProfile = (delta: 1 | -1) => {
-      const slot = keyboardSlotsRef.current.find((joined) => joined.slot === 0);
+      const targetSlot = lastKeyboardSlotRef.current;
+      const slot = keyboardSlotsRef.current.find((joined) => joined.slot === targetSlot);
       if (!slot) return;
       const options: (string | null)[] = [null, ...profilesRef.current.map((p) => p.id)];
       const foundIdx = options.indexOf(slot.profileId);

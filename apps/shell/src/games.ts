@@ -2,8 +2,13 @@ import type { GameManifest } from "@pfp/sdk";
 
 const raskullsEntry = import.meta.env.DEV ? "http://localhost:5174/" : "/games/raskulls/index.html";
 
-/** Games known to the shell. Phase 5 adds Pong for real; these are placeholders. */
-export const GAMES: GameManifest[] = [
+/** Local extension: tracks games that aren't implemented yet. */
+export interface GameEntry extends GameManifest {
+  disabled?: boolean;
+}
+
+/** Games known to the shell. Disabled entries are placeholders shown as Coming Soon. */
+export const GAMES: GameEntry[] = [
   {
     id: "raskulls",
     name: "Raskulls",
@@ -34,6 +39,7 @@ export const GAMES: GameManifest[] = [
     players: { min: 2, max: 2 },
     sdk: "^1.0.0",
     tags: ["classic", "2-player"],
+    disabled: true,
   },
   {
     id: "stick-fight",
@@ -45,6 +51,7 @@ export const GAMES: GameManifest[] = [
     players: { min: 2, max: 4 },
     sdk: "^1.0.0",
     tags: ["fighting", "party"],
+    disabled: true,
   },
   {
     id: "party-mix",
@@ -56,6 +63,7 @@ export const GAMES: GameManifest[] = [
     players: { min: 2, max: 4 },
     sdk: "^1.0.0",
     tags: ["party", "mini-games"],
+    disabled: true,
   },
 ];
 
