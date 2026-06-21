@@ -9,9 +9,14 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@pfp/sdk": "workspace:*"
+    "@pfp/sdk": "workspace:*",
+    "idb": "^8.0.0"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.0.0"
   }
 }
