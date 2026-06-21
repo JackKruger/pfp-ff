@@ -5,7 +5,8 @@ import { useShellTicker } from "../ticker.js";
 import type { GameHost } from "@pfp/sdk";
 import { PLAYER_COLORS } from "../games.js";
 
-type Phase = "loading" | "playing" | "overlay" | "error";
+// "done" = game over received; blocks overlay until results navigation fires.
+type Phase = "loading" | "playing" | "overlay" | "error" | "done";
 type OverlayItem = "resume" | "quit";
 
 const LOAD_TIMEOUT_MS = 8_000;
@@ -24,6 +25,12 @@ export function GameScreen() {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   const overlayItemRef = useRef(overlayItem);
   useEffect(() => { overlayItemRef.current = overlayItem; }, [overlayItem]);
+
+  // Snapshot pairedSlots / profiles at mount so changes don't re-run the iframe effect.
+  const pairedSlotsRef = useRef(pairedSlots);
+  useEffect(() => { pairedSlotsRef.current = pairedSlots; }, [pairedSlots]);
+  const profilesRef = useRef(profiles);
+  useEffect(() => { profilesRef.current = profiles; }, [profiles]);
 
   // Timeout: if the game doesn't call ready() within 8 s, show an error.
   useEffect(() => {
@@ -86,6 +93,8 @@ export function GameScreen() {
   }, [navigate]);
 
   // Wire the SDK host when the iframe loads.
+  // Deps omit pairedSlots / profiles — those are read via refs so profile edits
+  // or lobby state changes don't tear down an in-progress game.
   useEffect(() => {
     const iframe = iframeRef.current;
     const game = selectedGame;
@@ -97,8 +106,8 @@ export function GameScreen() {
       const host = createIframeHost(iframe, { sdkRange: game.sdk });
       hostRef.current = host;
 
-      const players = pairedSlots.map((slot) => {
-        const profile = profiles.find((p) => p.id === slot.profileId);
+      const players = pairedSlotsRef.current.map((slot) => {
+        const profile = profilesRef.current.find((p) => p.id === slot.profileId);
         return {
           slot: slot.slot,
           profileId: slot.profileId,
@@ -109,13 +118,15 @@ export function GameScreen() {
       });
 
       host.onReady(() => {
-        setPhase("playing");
+        // launch first — if it throws, phase stays "loading" and the error is surfaced.
         host.launch({ sessionId: crypto.randomUUID(), sdkVersion: SDK_VERSION, players, settings: {} });
+        setPhase("playing");
       });
 
       host.onGameOver((result) => {
+        setPhase("done"); // block overlay; results navigation follows async
         setResult(result);
-        void recordMatch(result);
+        recordMatch(result).catch(console.error);
         host.dispose();
         hostRef.current = null;
       });
@@ -135,7 +146,7 @@ export function GameScreen() {
       hostRef.current = null;
       iframe.src = "about:blank";
     };
-  }, [selectedGame, pairedSlots, profiles, setResult, recordMatch]);
+  }, [selectedGame, setResult, recordMatch]);
 
   if (!selectedGame) {
     return (

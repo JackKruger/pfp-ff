@@ -31,20 +31,24 @@ export function PairingScreen() {
       // 1. Run the pairing lobby (join / leave / disconnect).
       lobby.update(poller);
 
+      // Cache getSlots() — reused for profile cycling and unclaimed count.
+      const slots = lobby.getSlots();
+
       // 2. For each joined slot, let that controller cycle through profiles with ←/→.
-      for (const slot of lobby.getSlots()) {
+      for (const slot of slots) {
         const idx = slot.gamepadIndex;
         if (!poller.justPressed(idx, "left") && !poller.justPressed(idx, "right")) continue;
 
         const options: (string | null)[] = [null, ...profilesRef.current.map((p) => p.id)];
-        const currentIdx = Math.max(0, options.indexOf(slot.profileId));
+        const foundIdx = options.indexOf(slot.profileId);
+        const currentIdx = foundIdx < 0 ? 0 : foundIdx; // -1 when profile was deleted → snap to Guest
         const delta = poller.justPressed(idx, "right") ? 1 : -1;
         const nextIdx = (currentIdx + delta + options.length) % options.length;
-        lobby.assignProfile(slot.slot, options[nextIdx] ?? null);
+        lobby.assignProfile(slot.slot, options[nextIdx]);
       }
 
       // 3. Track how many controllers are available but not yet joined.
-      const joined = new Set(lobby.getSlots().map((s) => s.gamepadIndex));
+      const joined = new Set(slots.map((s) => s.gamepadIndex));
       const unclaimed = poller.connectedIndices().filter((i) => !joined.has(i)).length;
       if (unclaimed !== unclaimedCountRef.current) {
         unclaimedCountRef.current = unclaimed;
@@ -89,10 +93,9 @@ export function PairingScreen() {
             );
           }
           // Show "Press A" only if an unclaimed controller could fill this slot.
-          const slotsBefore = Array.from({ length: i }, (__, j) => j).filter(
-            (j) => !pairedSlots.find((s) => s.slot === j),
-          ).length;
-          const hasController = slotsBefore < availableForNew;
+          // Count empty slots before i: total slots before i minus the joined ones.
+          const emptyBefore = i - pairedSlots.filter((s) => s.slot < i).length;
+          const hasController = emptyBefore < availableForNew;
           return <PlayerCard key={i} slot={i} joined={false} controllerAvailable={hasController} />;
         })}
       </div>
