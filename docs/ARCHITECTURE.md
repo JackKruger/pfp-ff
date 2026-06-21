@@ -128,7 +128,26 @@ player counts.
   "players": { "min": 2, "max": 2 },
   "thumbnail": "thumb.png",
   "tags": ["arcade", "versus"],
-  "sdk": "^1.0.0"               // contract version the game targets
+  "sdk": "^1.0.0",              // contract version the game targets
+
+  // OPTIONAL: declare the stat keys this game emits, so stat screens and
+  // achievements can reference them by name with nice labels. Stats stay
+  // freeform at runtime — this is just metadata, not a hard schema.
+  "statKeys": {
+    "kos":   { "label": "KOs",   "scope": "player" },
+    "falls": { "label": "Falls", "scope": "player" }
+  },
+
+  // OPTIONAL: per-game achievements (see §7.2). Can be added any time later
+  // and back-filled from existing match history.
+  "achievements": [
+    {
+      "id": "first-blood",
+      "name": "First Blood",
+      "description": "Win your first match.",
+      "points": 10
+    }
+  ]
 }
 ```
 
@@ -201,9 +220,19 @@ interface PlayerStanding {
 - Smash clone → `rank` by last-alive order, `stats: { kos, falls }`.
 - Mario Party → `rank` by stars, `stats: { stars, coins, minigamesWon }`.
 
-The shell computes **generic** leaderboards (games played, wins, win-rate, best
-score) from `rank`/`score` alone, while still storing rich `stats` for
-game-specific screens later.
+**A game may feed *any* stats it wants** — `gameStats` (match-level) and each
+standing's `stats` (per-player) are open string→value maps the platform stores
+verbatim and never validates. The optional `statKeys` declaration in the
+manifest (§5.1) only adds labels/grouping so those freeform values render nicely
+and can be referenced by achievements; it is not a constraint.
+
+This gives us two layers for free:
+- The shell computes **generic** leaderboards (games played, wins, win-rate,
+  best score) from `rank`/`score` alone — works for every game with zero
+  knowledge of its rules.
+- The rich freeform `stats` are retained per match, so game-specific screens and
+  **achievements (§7.2)** can be added later — and computed *retroactively* over
+  history, because nothing was thrown away.
 
 ### 5.5 Versioning
 The contract is semver'd (`sdkVersion`). The host checks a game's `sdk` range in
@@ -275,6 +304,52 @@ interface MatchRecord {
 - **Later:** export/import (a JSON backup), then optional cloud sync — both sit
   behind the same `DataStore`.
 
+### 7.2 Achievements & overall score (meta-progression)
+
+A later layer (target: Phase 8), but designed for now so nothing blocks it.
+Players unlock **achievements**, each worth points; a player's **overall score**
+is the sum of their unlocked achievement points — an Xbox-Gamerscore-style number
+that spans the whole library and gives long-term reasons to keep playing.
+
+```ts
+interface AchievementDef {
+  id: string;
+  gameId: string | null;        // null = platform-wide (cross-game)
+  name: string;
+  description: string;
+  points: number;               // contributes to a profile's overall score
+  icon?: string;
+  secret?: boolean;             // hidden until unlocked
+}
+
+// An unlock is its own immutable record, like a MatchRecord.
+interface AchievementUnlock {
+  achievementId: string;
+  profileId: string;
+  unlockedAt: number;
+  matchId?: string;             // the match that triggered it, if any
+}
+```
+
+**Two ways an achievement unlocks — we support both:**
+1. **Game-emitted** — for in-the-moment feats the platform can't see (e.g. "won
+   without taking a hit"), a game lists triggered achievement ids in its
+   `GameResult`. Simple; logic lives in the game.
+2. **Platform-evaluated** — declarative rules the platform runs over a profile's
+   match history (e.g. *100 cumulative KOs*, *win 10 matches*, *play every
+   game*). These reference the freeform `stats` keys (§5.4) and can be added —
+   and **back-filled over existing history** — at any time, because match records
+   are an immutable, complete log.
+
+**Overall score** is *derived*, not stored: `sum(points of unlocked
+achievements)` per profile. Same philosophy as stats — recomputable, no
+migrations. New achievements simply re-run against history and award what's
+earned.
+
+> This is why the freeform-stats decision matters: it's the substrate
+> achievements are built on. We don't need to know today which achievements
+> we'll want — we just keep capturing rich match data so they're always possible.
+
 ---
 
 ## 8. Shell UI (`apps/shell`, `@pfp/ui`)
@@ -287,6 +362,9 @@ interface MatchRecord {
 4. **Results** — post-match standings, "rematch" / "back to menu".
 5. **Profiles management** — create/edit/delete profiles.
 6. **Stats** — per-profile and per-game leaderboards built from match records.
+7. **Achievements / overall score** *(Phase 8)* — per-profile achievement list,
+   unlock progress, and the running overall score (§7.2). A post-match
+   achievement-unlocked toast on the results screen.
 
 **Controller-driven navigation:** a small spatial/focus manager so D-pad/stick
 moves focus between elements, A = select, B = back. Lives in `@pfp/ui` so every
@@ -379,6 +457,11 @@ The **vertical slice** (Phases 1–5) is the priority: a full
   to the shell.
 - **Phase 7 — Real games + polish.** A Smash-lite or Stick-Fight-lite, profile
   avatars, shell theming/sound, controller test screen polish.
+- **Phase 8 — Achievements & overall score.** Achievement defs (game + platform),
+  unlock records, the evaluation engine (game-emitted + platform-evaluated rules,
+  back-fillable over history), and the achievements/overall-score UI (§7.2).
+  *Done when:* playing a match can unlock an achievement, it raises the profile's
+  overall score, and re-running the engine over history awards past unlocks.
 
 ---
 
@@ -388,7 +471,10 @@ The **vertical slice** (Phases 1–5) is the priority: a full
   abstraction keeps the door open for sync.
 - **Cross-game meta** — tournaments/brackets stringing minigames together (very
   Mario-Party); the `rank`-based result model already supports scoring this.
-- **Unlocks / achievements** — derivable from match records later.
+- **Achievements & overall score** — now designed in §7.2 (Phase 8); built on
+  freeform stats + immutable match records so it can be added and back-filled
+  later. Open detail: do per-game achievement *points* need balancing/caps so no
+  single game can dominate the overall score?
 - **Rumble / haptics** — nice-to-have; Gamepad API support is inconsistent, so
   treat as best-effort.
 - **Accessibility** — remappable buttons, colorblind-safe player colors.
