@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useFocusable } from "@pfp/ui";
 import type { GameManifest } from "@pfp/sdk";
 
@@ -9,6 +10,10 @@ interface GameCardProps {
 
 export function GameCard({ game, onSelect, autoFocus = false }: GameCardProps) {
   const { ref, focused } = useFocusable<HTMLDivElement>(game.id, onSelect, { autoFocus });
+
+  useEffect(() => {
+    if (focused) ref.current?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [focused, ref]);
 
   return (
     <div ref={ref} className={`game-card${focused ? " game-card--focused" : ""}`} onClick={onSelect}>

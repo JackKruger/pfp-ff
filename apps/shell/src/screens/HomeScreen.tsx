@@ -26,7 +26,7 @@ export function HomeScreen() {
         </nav>
       </header>
 
-      <main className="home-screen__grid">
+      <main className="home-screen__shelf">
         {GAMES.map((game, i) => (
           <GameCard
             key={game.id}

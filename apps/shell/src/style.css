@@ -91,14 +91,21 @@ body {
   gap: 12px;
 }
 
-.home-screen__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: var(--gap);
+.home-screen__shelf {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
   flex: 1;
-  overflow-y: auto;
-  padding: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 16px 4px;
+  /* Snap cards to centre on scroll */
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  /* Hide scrollbar but keep scrollability */
+  scrollbar-width: none;
 }
+.home-screen__shelf::-webkit-scrollbar { display: none; }
 
 .home-screen__footer {
   text-align: center;
@@ -108,23 +115,29 @@ body {
 
 /* ── Game card ─────────────────────────────────────────────── */
 .game-card {
+  flex-shrink: 0;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 2px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
   cursor: pointer;
-  transition: border-color 0.1s, transform 0.1s;
+  scroll-snap-align: center;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .game-card--focused {
   border-color: var(--focus);
-  box-shadow: 0 0 0 3px rgba(79, 157, 255, 0.3);
-  transform: scale(1.02);
+  box-shadow: 0 0 0 3px rgba(79, 157, 255, 0.35), 0 8px 32px rgba(0, 0, 0, 0.5);
+  transform: scale(1.06) translateY(-4px);
 }
 
 .game-card__thumb {
   background: var(--surface2);
-  height: 120px;
+  flex: 1;
+  min-height: 240px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -133,14 +146,15 @@ body {
 .game-card__thumb img { width: 100%; height: 100%; object-fit: cover; }
 
 .game-card__thumb-placeholder {
-  font-size: 3rem;
+  font-size: 5rem;
   font-weight: 800;
   color: var(--text-dim);
   text-transform: uppercase;
+  opacity: 0.4;
 }
 
-.game-card__info { padding: 12px; }
-.game-card__name { font-size: 1.05rem; font-weight: 700; }
+.game-card__info { padding: 14px 16px 16px; }
+.game-card__name { font-size: 1.1rem; font-weight: 700; }
 .game-card__players { font-size: 0.82rem; color: var(--text-dim); margin-top: 4px; }
 .game-card__tags { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
 
