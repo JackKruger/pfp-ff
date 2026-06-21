@@ -14,7 +14,7 @@ import type {
   Profile,
   ProfileUpdate,
 } from "./types.js";
-import { applyMatchQuery, newId } from "./util.js";
+import { applyMatchQuery, compareById, newId, stripUndefined } from "./util.js";
 
 const PROFILES = "profiles";
 const MATCHES = "matches";
@@ -68,7 +68,7 @@ export class IndexedDbDataStore implements DataStore {
 
   async listProfiles(): Promise<Profile[]> {
     const all = await (await this.db()).getAll(PROFILES);
-    return all.sort((a, b) => a.createdAt - b.createdAt);
+    return all.sort((a, b) => a.createdAt - b.createdAt || compareById(a, b));
   }
 
   async updateProfile(id: string, patch: ProfileUpdate): Promise<Profile> {
@@ -85,12 +85,15 @@ export class IndexedDbDataStore implements DataStore {
   }
 
   async recordMatch(input: NewMatchRecord): Promise<MatchRecord> {
+    // Clone on write so the stored record and the returned value are both
+    // independent of the caller's input array (put would clone into the DB, but
+    // the returned object would otherwise still alias input.standings).
     const record: MatchRecord = {
       id: newId(),
       gameId: input.gameId,
       playedAt: input.playedAt ?? Date.now(),
-      standings: input.standings,
-      ...(input.gameStats !== undefined ? { gameStats: input.gameStats } : {}),
+      standings: structuredClone(input.standings),
+      ...(input.gameStats !== undefined ? { gameStats: structuredClone(input.gameStats) } : {}),
     };
     await (await this.db()).put(MATCHES, record);
     return record;
@@ -111,12 +114,4 @@ export class IndexedDbDataStore implements DataStore {
     await Promise.all([tx.objectStore(PROFILES).clear(), tx.objectStore(MATCHES).clear()]);
     await tx.done;
   }
-}
-
-function stripUndefined<T extends object>(patch: T): Partial<T> {
-  const out: Partial<T> = {};
-  for (const [key, value] of Object.entries(patch)) {
-    if (value !== undefined) out[key as keyof T] = value as T[keyof T];
-  }
-  return out;
 }

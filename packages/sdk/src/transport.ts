@@ -16,9 +16,7 @@ export interface Transport {
  * Game-side transport: posts to the parent window, listens on this window.
  * Used by a game running inside the shell's iframe.
  */
-export function createParentTransport(
-  options: { targetOrigin?: string } = {},
-): Transport {
+export function createParentTransport(options: { targetOrigin?: string } = {}): Transport {
   const targetOrigin = options.targetOrigin ?? "*";
   const handlers = new Set<(message: Envelope) => void>();
 

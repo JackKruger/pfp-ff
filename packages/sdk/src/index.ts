@@ -4,6 +4,7 @@
  */
 export * from "./types.js";
 export * from "./version.js";
+export * from "./emitter.js";
 export * from "./protocol.js";
 export * from "./transport.js";
 export * from "./client.js";

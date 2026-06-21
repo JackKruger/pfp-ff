@@ -26,7 +26,10 @@ export class ManualGamepadSource implements GamepadSource {
   private states: (GamepadState | null)[] = [];
 
   read(): (GamepadState | null)[] {
-    return this.states;
+    // Return a fresh array each read: the poller keeps the previous read for edge
+    // detection, so handing back the live array (mutated via set()) would make
+    // previous and current alias and silently break justPressed/justReleased.
+    return [...this.states];
   }
 
   setStates(states: (GamepadState | null)[]): void {

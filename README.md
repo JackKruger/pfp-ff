@@ -9,6 +9,7 @@ TypeScript or Godot (HTML5 export) — plug into a single, versioned contract.
 full architecture and milestone plan.
 
 ## At a glance
+
 - **Shell + plugin contract**, not a monolith — adding a game is cheap.
 - **One contract, multiple engines** — native-TS and Godot games share the same socket.
 - **Local-first** — runs on one machine, no accounts/internet required.
@@ -16,4 +17,5 @@ full architecture and milestone plan.
 - **Portable** — browser now, Tauri/Electron kiosk later.
 
 ## First milestone
+
 A full vertical slice: `menu → pair controllers → play Pong → record result → see stats`.

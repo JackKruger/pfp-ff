@@ -18,6 +18,7 @@ export interface PairingInput {
 export class InputPoller implements PairingInput {
   private current: (GamepadState | null)[] = [];
   private previous: (GamepadState | null)[] = [];
+  private primed = false;
   private rafId: number | null = null;
   private readonly connectHandlers = new Set<ControllerListener>();
   private readonly disconnectHandlers = new Set<ControllerListener>();
@@ -29,6 +30,13 @@ export class InputPoller implements PairingInput {
     this.previous = this.current;
     this.current = this.source.read();
     this.detectConnectionChanges();
+    if (!this.primed) {
+      // First tick: suppress phantom button edges from controls that were already
+      // held before polling began (e.g. A held as the lobby mounts -> no instant
+      // join). Connect events for initially-present pads already fired above.
+      this.previous = this.current;
+      this.primed = true;
+    }
   }
 
   /** Begin a requestAnimationFrame polling loop (browser only). */

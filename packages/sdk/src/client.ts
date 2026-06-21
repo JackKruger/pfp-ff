@@ -3,6 +3,7 @@
  * `ready()` once loaded. The shell replies with `launch(ctx)`; the game plays and
  * reports back via `gameOver(result)`. See docs/ARCHITECTURE.md §5.3.
  */
+import { Emitter } from "./emitter.js";
 import { GameToShell, ShellToGame, makeEnvelope, type Envelope } from "./protocol.js";
 import { createParentTransport, type Transport } from "./transport.js";
 import type { GameResult, LaunchContext } from "./types.js";
@@ -31,34 +32,27 @@ export interface GameClient {
  * case). Pass a linked transport for tests / the mock harness.
  */
 export function createGameClient(transport: Transport = createParentTransport()): GameClient {
-  const launchHandlers = new Set<(context: LaunchContext) => void>();
-  const pauseHandlers = new Set<() => void>();
-  const resumeHandlers = new Set<() => void>();
-  const terminateHandlers = new Set<() => void>();
+  const launch = new Emitter<[LaunchContext]>();
+  const pause = new Emitter();
+  const resume = new Emitter();
+  const terminate = new Emitter();
 
   const unsubscribe = transport.subscribe((message: Envelope) => {
     switch (message.type) {
       case ShellToGame.LAUNCH:
-        for (const handler of launchHandlers) handler(message.payload);
+        launch.emit(message.payload);
         break;
       case ShellToGame.PAUSE:
-        for (const handler of pauseHandlers) handler();
+        pause.emit();
         break;
       case ShellToGame.RESUME:
-        for (const handler of resumeHandlers) handler();
+        resume.emit();
         break;
       case ShellToGame.TERMINATE:
-        for (const handler of terminateHandlers) handler();
+        terminate.emit();
         break;
     }
   });
-
-  const register =
-    <T>(set: Set<T>) =>
-    (callback: T): (() => void) => {
-      set.add(callback);
-      return () => set.delete(callback);
-    };
 
   return {
     ready() {
@@ -73,16 +67,16 @@ export function createGameClient(transport: Transport = createParentTransport())
     reportError(message) {
       transport.post(makeEnvelope(GameToShell.ERROR, { message }));
     },
-    onLaunch: register(launchHandlers),
-    onPause: register(pauseHandlers),
-    onResume: register(resumeHandlers),
-    onTerminate: register(terminateHandlers),
+    onLaunch: (callback) => launch.add(callback),
+    onPause: (callback) => pause.add(callback),
+    onResume: (callback) => resume.add(callback),
+    onTerminate: (callback) => terminate.add(callback),
     dispose() {
       unsubscribe();
-      launchHandlers.clear();
-      pauseHandlers.clear();
-      resumeHandlers.clear();
-      terminateHandlers.clear();
+      launch.clear();
+      pause.clear();
+      resume.clear();
+      terminate.clear();
       transport.dispose();
     },
   };

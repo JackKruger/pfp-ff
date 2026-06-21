@@ -11,7 +11,7 @@ import type {
   Profile,
   ProfileUpdate,
 } from "./types.js";
-import { applyMatchQuery, newId } from "./util.js";
+import { applyMatchQuery, compareById, newId, stripUndefined } from "./util.js";
 
 export class InMemoryDataStore implements DataStore {
   private readonly profiles = new Map<string, Profile>();
@@ -38,7 +38,7 @@ export class InMemoryDataStore implements DataStore {
 
   async listProfiles(): Promise<Profile[]> {
     return [...this.profiles.values()]
-      .sort((a, b) => a.createdAt - b.createdAt)
+      .sort((a, b) => a.createdAt - b.createdAt || compareById(a, b))
       .map(clone);
   }
 
@@ -55,12 +55,14 @@ export class InMemoryDataStore implements DataStore {
   }
 
   async recordMatch(input: NewMatchRecord): Promise<MatchRecord> {
+    // Clone on write so later mutation of the caller's input can't corrupt
+    // stored state (IndexedDB structured-clones on put; we match that here).
     const record: MatchRecord = {
       id: newId(),
       gameId: input.gameId,
       playedAt: input.playedAt ?? Date.now(),
-      standings: input.standings,
-      ...(input.gameStats !== undefined ? { gameStats: input.gameStats } : {}),
+      standings: clone(input.standings),
+      ...(input.gameStats !== undefined ? { gameStats: clone(input.gameStats) } : {}),
     };
     this.matches.set(record.id, record);
     return clone(record);
@@ -83,12 +85,4 @@ export class InMemoryDataStore implements DataStore {
 
 function clone<T>(value: T): T {
   return structuredClone(value);
-}
-
-function stripUndefined<T extends object>(patch: T): Partial<T> {
-  const out: Partial<T> = {};
-  for (const [key, value] of Object.entries(patch)) {
-    if (value !== undefined) out[key as keyof T] = value as T[keyof T];
-  }
-  return out;
 }

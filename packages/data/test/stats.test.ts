@@ -21,9 +21,19 @@ function match(
 
 describe("computeProfileStats", () => {
   const matches: MatchRecord[] = [
-    match("pong", 1000, [["p1", 1, 11], ["p2", 2, 5]]),
-    match("pong", 2000, [["p1", 2, 8], ["p2", 1, 11]]),
-    match("smash", 3000, [["p1", 1], ["p2", 2], ["p3", 3]]),
+    match("pong", 1000, [
+      ["p1", 1, 11],
+      ["p2", 2, 5],
+    ]),
+    match("pong", 2000, [
+      ["p1", 2, 8],
+      ["p2", 1, 11],
+    ]),
+    match("smash", 3000, [
+      ["p1", 1],
+      ["p2", 2],
+      ["p3", 3],
+    ]),
   ];
 
   it("aggregates totals and per-game breakdown", () => {
@@ -41,7 +51,13 @@ describe("computeProfileStats", () => {
   });
 
   it("counts tied first places as wins", () => {
-    const tied = [match("party", 1, [["p1", 1], ["p2", 1], ["p3", 3]])];
+    const tied = [
+      match("party", 1, [
+        ["p1", 1],
+        ["p2", 1],
+        ["p3", 3],
+      ]),
+    ];
     expect(computeProfileStats("p1", tied).totalWins).toBe(1);
     expect(computeProfileStats("p2", tied).totalWins).toBe(1);
     expect(computeProfileStats("p3", tied).totalWins).toBe(0);
@@ -56,9 +72,19 @@ describe("computeProfileStats", () => {
 
 describe("computeLeaderboard", () => {
   const matches: MatchRecord[] = [
-    match("pong", 1000, [["p1", 1], ["p2", 2]]),
-    match("pong", 2000, [["p1", 1], ["p2", 2]]),
-    match("smash", 3000, [["p2", 1], ["p1", 2], [null, 3]]),
+    match("pong", 1000, [
+      ["p1", 1],
+      ["p2", 2],
+    ]),
+    match("pong", 2000, [
+      ["p1", 1],
+      ["p2", 2],
+    ]),
+    match("smash", 3000, [
+      ["p2", 1],
+      ["p1", 2],
+      [null, 3],
+    ]),
   ];
 
   it("ranks across all games by wins then win-rate", () => {
@@ -75,5 +101,18 @@ describe("computeLeaderboard", () => {
   it("excludes guests (null profileId)", () => {
     const board = computeLeaderboard(matches);
     expect(board.some((e) => e.profileId === null)).toBe(false);
+  });
+
+  it("counts a profile once per match even if it appears in two standings", () => {
+    // Degenerate match where p1 occupies two standings of the same game.
+    const dup = [
+      match("pong", 1, [
+        ["p1", 1],
+        ["p1", 2],
+      ]),
+    ];
+    const board = computeLeaderboard(dup);
+    expect(board).toHaveLength(1);
+    expect(board[0]).toMatchObject({ profileId: "p1", played: 1, wins: 1 });
   });
 });

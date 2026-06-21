@@ -3,12 +3,8 @@
  * game's iframe, and drives the lifecycle: wait for `ready`, send `launch`,
  * handle `gameOver` / `requestExit` / `error`. See docs/ARCHITECTURE.md §5.3.
  */
-import {
-  GameToShell,
-  ShellToGame,
-  makeEnvelope,
-  type Envelope,
-} from "./protocol.js";
+import { Emitter } from "./emitter.js";
+import { GameToShell, ShellToGame, makeEnvelope, type Envelope } from "./protocol.js";
 import { createWindowTransport, type Transport } from "./transport.js";
 import type { GameResult, LaunchContext } from "./types.js";
 import { SDK_VERSION, satisfies } from "./version.js";
@@ -33,50 +29,40 @@ export interface GameHost {
   onRequestExit(callback: () => void): () => void;
   onError(callback: (error: { message: string }) => void): () => void;
   /** Game's declared SDK range is incompatible with this host's SDK_VERSION. */
-  onIncompatible(callback: (info: { gameSdkRange: string; hostVersion: string }) => void): () => void;
+  onIncompatible(
+    callback: (info: { gameSdkRange: string; hostVersion: string }) => void,
+  ): () => void;
 
   dispose(): void;
 }
 
 export function createGameHost(transport: Transport, options: GameHostOptions = {}): GameHost {
-  const readyHandlers = new Set<(info: { sdkVersion: string }) => void>();
-  const gameOverHandlers = new Set<(result: GameResult) => void>();
-  const requestExitHandlers = new Set<() => void>();
-  const errorHandlers = new Set<(error: { message: string }) => void>();
-  const incompatibleHandlers = new Set<
-    (info: { gameSdkRange: string; hostVersion: string }) => void
-  >();
+  const ready = new Emitter<[{ sdkVersion: string }]>();
+  const gameOver = new Emitter<[GameResult]>();
+  const requestExit = new Emitter();
+  const error = new Emitter<[{ message: string }]>();
+  const incompatible = new Emitter<[{ gameSdkRange: string; hostVersion: string }]>();
 
   const unsubscribe = transport.subscribe((message: Envelope) => {
     switch (message.type) {
       case GameToShell.READY: {
-        const info = message.payload;
         if (options.sdkRange && !satisfies(SDK_VERSION, options.sdkRange)) {
-          for (const handler of incompatibleHandlers) {
-            handler({ gameSdkRange: options.sdkRange, hostVersion: SDK_VERSION });
-          }
+          incompatible.emit({ gameSdkRange: options.sdkRange, hostVersion: SDK_VERSION });
         }
-        for (const handler of readyHandlers) handler(info);
+        ready.emit(message.payload);
         break;
       }
       case GameToShell.GAME_OVER:
-        for (const handler of gameOverHandlers) handler(message.payload);
+        gameOver.emit(message.payload);
         break;
       case GameToShell.REQUEST_EXIT:
-        for (const handler of requestExitHandlers) handler();
+        requestExit.emit();
         break;
       case GameToShell.ERROR:
-        for (const handler of errorHandlers) handler(message.payload);
+        error.emit(message.payload);
         break;
     }
   });
-
-  const register =
-    <T>(set: Set<T>) =>
-    (callback: T): (() => void) => {
-      set.add(callback);
-      return () => set.delete(callback);
-    };
 
   return {
     launch(context) {
@@ -91,18 +77,18 @@ export function createGameHost(transport: Transport, options: GameHostOptions = 
     terminate() {
       transport.post(makeEnvelope(ShellToGame.TERMINATE, undefined));
     },
-    onReady: register(readyHandlers),
-    onGameOver: register(gameOverHandlers),
-    onRequestExit: register(requestExitHandlers),
-    onError: register(errorHandlers),
-    onIncompatible: register(incompatibleHandlers),
+    onReady: (callback) => ready.add(callback),
+    onGameOver: (callback) => gameOver.add(callback),
+    onRequestExit: (callback) => requestExit.add(callback),
+    onError: (callback) => error.add(callback),
+    onIncompatible: (callback) => incompatible.add(callback),
     dispose() {
       unsubscribe();
-      readyHandlers.clear();
-      gameOverHandlers.clear();
-      requestExitHandlers.clear();
-      errorHandlers.clear();
-      incompatibleHandlers.clear();
+      ready.clear();
+      gameOver.clear();
+      requestExit.clear();
+      error.clear();
+      incompatible.clear();
       transport.dispose();
     },
   };

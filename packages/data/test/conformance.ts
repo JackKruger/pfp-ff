@@ -15,10 +15,7 @@ function standing(profileId: string | null, rank: number, score?: number): Playe
   };
 }
 
-export function runDataStoreConformance(
-  name: string,
-  createStore: () => DataStore,
-): void {
+export function runDataStoreConformance(name: string, createStore: () => DataStore): void {
   describe(`DataStore conformance: ${name}`, () => {
     describe("profiles", () => {
       it("creates, reads, lists, updates, deletes", async () => {
@@ -103,6 +100,33 @@ export function runDataStoreConformance(
 
         const limited = await store.listMatches({ limit: 1 });
         expect(limited.map((m) => m.playedAt)).toEqual([3000]);
+      });
+
+      it("orders equal-playedAt matches deterministically (by id)", async () => {
+        const store = createStore();
+        const ids: string[] = [];
+        for (let i = 0; i < 3; i++) {
+          const m = await store.recordMatch({
+            gameId: "pong",
+            playedAt: 5000, // identical timestamp for all three
+            standings: [standing("p1", 1)],
+          });
+          ids.push(m.id);
+        }
+        const order = (await store.listMatches()).map((m) => m.id);
+        // Stable, backend-independent tiebreak: ascending id.
+        expect(order).toEqual([...ids].sort());
+      });
+
+      it("isolates stored/returned data from later caller mutation", async () => {
+        const store = createStore();
+        const standings = [standing("p1", 1)];
+        const recorded = await store.recordMatch({ gameId: "pong", standings });
+
+        standings.push(standing("p2", 2)); // mutate the caller's array afterwards
+
+        expect(recorded.standings).toHaveLength(1);
+        expect((await store.getMatch(recorded.id))?.standings).toHaveLength(1);
       });
     });
 

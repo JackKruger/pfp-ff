@@ -63,6 +63,26 @@ describe("InputPoller edge detection", () => {
     expect(poller.connectedIndices()).toEqual([1]);
   });
 
+  it("detects edges even when the source is mutated in place via set()", () => {
+    const source = new ManualGamepadSource();
+    const poller = new InputPoller(source);
+
+    source.set(0, pad(0));
+    poller.tick();
+    source.set(0, pad(0, { a: true })); // in-place mutation, no setStates
+    poller.tick();
+    expect(poller.justPressed(0, "a")).toBe(true);
+  });
+
+  it("does not report a phantom press for a button held before the first tick", () => {
+    const source = new ManualGamepadSource();
+    const poller = new InputPoller(source);
+    source.setStates([pad(0, { a: true })]); // A already held as polling begins
+    poller.tick();
+    expect(poller.justPressed(0, "a")).toBe(false);
+    expect(poller.pressed(0, "a")).toBe(true);
+  });
+
   it("reads analog triggers", () => {
     const source = new ManualGamepadSource();
     const poller = new InputPoller(source);

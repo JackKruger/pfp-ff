@@ -85,9 +85,7 @@ export function computeProfileStats(profileId: string, matches: MatchRecord[]): 
     totalPlayed,
     totalWins,
     winRate: rate(totalWins, totalPlayed),
-    perGame: [...perGame.values()].sort(
-      (a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0),
-    ),
+    perGame: [...perGame.values()].sort((a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0)),
   };
 }
 
@@ -108,9 +106,15 @@ export function computeLeaderboard(
   const byProfile = new Map<string, LeaderboardEntry>();
 
   for (const match of scoped) {
+    // Count each profile at most once per match (its first standing), matching
+    // computeProfileStats' .find() semantics, even if a profile somehow occupies
+    // two slots of the same match.
+    const counted = new Set<string>();
     for (const standing of match.standings) {
       if (standing.profileId === null) continue; // guests aren't ranked long-term
       const id = standing.profileId;
+      if (counted.has(id)) continue;
+      counted.add(id);
       const existing = byProfile.get(id);
       const played = (existing?.played ?? 0) + 1;
       const wins = (existing?.wins ?? 0) + (isWin(standing.rank) ? 1 : 0);
