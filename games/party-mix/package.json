@@ -1,0 +1,15 @@
+{
+  "name": "@pfp/party-mix",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5178",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4178",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pfp/sdk": "workspace:*"
+  }
+}
