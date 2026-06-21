@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" role="img" aria-label="Trophy">
+  <path
+    d="M12 7h16v6c0 6-3.2 10-8 10s-8-4-8-10V7Z"
+    fill="#facc15"
+    stroke="#f59e0b"
+    stroke-width="3"
+  />
+  <path
+    d="M12 10H6v3c0 4 2.6 7 6.5 7M28 10h6v3c0 4-2.6 7-6.5 7"
+    fill="none"
+    stroke="#f59e0b"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+  <path d="M20 23v6M14 33h12" stroke="#f8fafc" stroke-width="3" stroke-linecap="round" />
+  <path d="M16 13h8" stroke="#fff7ad" stroke-width="3" stroke-linecap="round" />
+</svg>

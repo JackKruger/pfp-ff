@@ -15,7 +15,7 @@ export function HomeScreen() {
   return (
     <div className="screen home-screen">
       <header className="home-screen__header">
-        <h1 className="home-screen__title">PFP-FF</h1>
+        <img className="home-screen__wordmark" src="/brand/pfp-ff-wordmark.svg" alt="PFP-FF" />
         <nav className="home-screen__nav">
           <Btn id="nav-profiles" onClick={() => navigate("profiles")} variant="ghost">
             Profiles

@@ -2,7 +2,7 @@ import { useShell } from "../store.js";
 import { Btn } from "../components/Btn.js";
 import { PLAYER_COLORS } from "../games.js";
 
-const RANK_MEDALS = ["🥇", "🥈", "🥉", "4th"];
+const RANK_MEDALS = ["/icons/medal-gold.svg", "/icons/medal-silver.svg", "/icons/medal-bronze.svg"];
 
 export function ResultsScreen() {
   const { lastResult, selectedGame, pairedSlots, profiles, navigate } = useShell();
@@ -30,12 +30,14 @@ export function ResultsScreen() {
           const slot = pairedSlots.find((s) => s.slot === standing.slot);
           const profile = profiles.find((p) => p.id === standing.profileId);
           const color = profile?.color ?? PLAYER_COLORS[standing.slot] ?? "#888";
-          const name = profile?.name ?? slot ? `P${standing.slot + 1}` : "Guest";
-          const medal = RANK_MEDALS[standing.rank - 1] ?? `${standing.rank}th`;
+          const name = profile?.name ?? (slot ? `P${standing.slot + 1}` : "Guest");
+          const medal = RANK_MEDALS[standing.rank - 1];
 
           return (
             <li key={standing.slot} className="results-row">
-              <span className="results-row__medal">{medal}</span>
+              <span className="results-row__medal">
+                {medal ? <img src={medal} alt={`${standing.rank} place`} /> : `${standing.rank}th`}
+              </span>
               <span className="results-row__dot" style={{ background: color }} />
               <span className="results-row__name">{name}</span>
               {standing.score !== undefined && (

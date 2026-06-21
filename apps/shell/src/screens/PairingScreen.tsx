@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { PairingLobby } from "@pfp/input";
-import type { DigitalButton } from "@pfp/input";
+import type { PairingSlot } from "@pfp/input";
 import { PlayerCard } from "../components/PlayerCard.js";
 import { Btn } from "../components/Btn.js";
 import { useShell } from "../store.js";
 import { useShellTicker } from "../ticker.js";
 
-// Sentinel gamepad index for the keyboard player — never a real Gamepad API index.
-const KEYBOARD_IDX = -1;
+// Negative indices are keyboard-only slots and never real Gamepad API indices.
+const keyboardGamepadIndex = (slot: number): number => -slot - 1;
 
 export function PairingScreen() {
   const { navigate, selectedGame, pairedSlots, setPairedSlots, profiles } = useShell();
   const ticker = useShellTicker();
-  const lobbyRef = useRef(new PairingLobby({ maxPlayers: selectedGame?.players.max ?? 4 }));
+  const gamepadSlotsRef = useRef<PairingSlot[]>([]);
+  const keyboardSlotsRef = useRef<PairingSlot[]>([]);
 
   // How many connected controllers haven't joined yet — drives the "no controller" hint.
   const unclaimedCountRef = useRef(0);
@@ -20,83 +21,139 @@ export function PairingScreen() {
 
   // Keep a stable ref to profiles so the tick handler always reads the latest list.
   const profilesRef = useRef(profiles);
-  useEffect(() => { profilesRef.current = profiles; }, [profiles]);
-
-  // Buffer keyboard button presses between ticks; cleared at end of each tick.
-  const kbPressedRef = useRef(new Set<DigitalButton>());
-
-  // Map keyboard keys → PFP buttons for the keyboard player.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); kbPressedRef.current.add("a"); }
-      if (e.key === "Escape")                 { e.preventDefault(); kbPressedRef.current.add("b"); }
-      if (e.key === "ArrowLeft")              { e.preventDefault(); kbPressedRef.current.add("left"); }
-      if (e.key === "ArrowRight")             { e.preventDefault(); kbPressedRef.current.add("right"); }
+    profilesRef.current = profiles;
+  }, [profiles]);
+
+  useEffect(() => {
+    const maxPlayers = selectedGame?.players.max ?? 4;
+    const lobby = new PairingLobby({ maxPlayers });
+    gamepadSlotsRef.current = [];
+    keyboardSlotsRef.current = [];
+    unclaimedCountRef.current = 0;
+    setUnclaimedCount(0);
+
+    const publishSlots = () => {
+      const gamepadSlots = gamepadSlotsRef.current;
+      const keyboardSlots = keyboardSlotsRef.current.filter(
+        (slot) => !gamepadSlots.some((gamepadSlot) => gamepadSlot.slot === slot.slot),
+      );
+      setPairedSlots([...gamepadSlots, ...keyboardSlots].sort((a, b) => a.slot - b.slot));
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
-  useEffect(() => {
-    const lobby = lobbyRef.current;
-    lobby.reset();
-    setPairedSlots([]);
+    const joinKeyboardSlot = (slot: number) => {
+      if (slot >= maxPlayers) return;
+      if (gamepadSlotsRef.current.some((joined) => joined.slot === slot)) return;
+      if (keyboardSlotsRef.current.some((joined) => joined.slot === slot)) return;
+      keyboardSlotsRef.current = [
+        ...keyboardSlotsRef.current,
+        { slot, gamepadIndex: keyboardGamepadIndex(slot), profileId: null },
+      ];
+      publishSlots();
+    };
 
-    const unsubscribe = lobby.onChange((slots) => setPairedSlots(slots));
+    const removeKeyboardSlot = (slot: number) => {
+      const next = keyboardSlotsRef.current.filter((joined) => joined.slot !== slot);
+      if (next.length === keyboardSlotsRef.current.length) return;
+      keyboardSlotsRef.current = next;
+      publishSlots();
+    };
+
+    const toggleKeyboardSlot = (slot: number) => {
+      if (keyboardSlotsRef.current.some((joined) => joined.slot === slot)) removeKeyboardSlot(slot);
+      else joinKeyboardSlot(slot);
+    };
+
+    const cycleKeyboardProfile = (delta: 1 | -1) => {
+      const slot = keyboardSlotsRef.current.find((joined) => joined.slot === 0);
+      if (!slot) return;
+      const options: (string | null)[] = [null, ...profilesRef.current.map((p) => p.id)];
+      const foundIdx = options.indexOf(slot.profileId);
+      const currentIdx = foundIdx < 0 ? 0 : foundIdx;
+      const nextIdx = (currentIdx + delta + options.length) % options.length;
+      keyboardSlotsRef.current = keyboardSlotsRef.current.map((joined) =>
+        joined.slot === slot.slot ? { ...joined, profileId: options[nextIdx] } : joined,
+      );
+      publishSlots();
+    };
+
+    const unsubscribe = lobby.onChange((slots) => {
+      gamepadSlotsRef.current = slots;
+      publishSlots();
+    });
 
     const unregisterTick = ticker.onTick(() => {
       const poller = ticker.poller;
-      const kbPressed = kbPressedRef.current;
 
-      // Synthetic PairingInput: keyboard always appears as a connected "controller".
-      const input = {
-        connectedIndices: () => [KEYBOARD_IDX, ...poller.connectedIndices()],
-        justPressed: (idx: number, button: DigitalButton): boolean =>
-          idx === KEYBOARD_IDX ? kbPressed.has(button) : poller.justPressed(idx, button),
-      };
-
-      // 1. Run the pairing lobby (join / leave / disconnect).
-      lobby.update(input);
+      // 1. Run the pairing lobby for physical gamepads.
+      lobby.update(poller);
 
       // Cache getSlots() — reused for profile cycling and unclaimed count.
       const slots = lobby.getSlots();
 
-      // Helper so profile cycling works the same for keyboard and gamepad players.
-      const justPressed = (idx: number, btn: DigitalButton): boolean =>
-        idx === KEYBOARD_IDX ? kbPressed.has(btn) : poller.justPressed(idx, btn);
-
-      // 2. For each joined slot, let that controller cycle through profiles with ←/→.
+      // 2. For each gamepad slot, let that controller cycle through profiles with left/right.
       for (const slot of slots) {
         const idx = slot.gamepadIndex;
-        if (!justPressed(idx, "left") && !justPressed(idx, "right")) continue;
+        if (!poller.justPressed(idx, "left") && !poller.justPressed(idx, "right")) continue;
 
         const options: (string | null)[] = [null, ...profilesRef.current.map((p) => p.id)];
         const foundIdx = options.indexOf(slot.profileId);
-        const currentIdx = foundIdx < 0 ? 0 : foundIdx; // -1 when profile was deleted → snap to Guest
-        const delta = justPressed(idx, "right") ? 1 : -1;
+        const currentIdx = foundIdx < 0 ? 0 : foundIdx;
+        const delta = poller.justPressed(idx, "right") ? 1 : -1;
         const nextIdx = (currentIdx + delta + options.length) % options.length;
         lobby.assignProfile(slot.slot, options[nextIdx]);
       }
 
-      // Clear staged keyboard presses now that the tick has consumed them.
-      kbPressed.clear();
-
       // 3. Track how many controllers are available but not yet joined.
       const joined = new Set(slots.map((s) => s.gamepadIndex));
-      const keyboardJoined = joined.has(KEYBOARD_IDX);
       const physicalUnclaimed = poller.connectedIndices().filter((i) => !joined.has(i)).length;
-      const unclaimed = physicalUnclaimed + (keyboardJoined ? 0 : 1); // keyboard always "connected"
+      const keyboardAvailable = keyboardSlotsRef.current.some((slot) => slot.slot === 0) ? 0 : 1;
+      const unclaimed = physicalUnclaimed + keyboardAvailable;
       if (unclaimed !== unclaimedCountRef.current) {
         unclaimedCountRef.current = unclaimed;
         setUnclaimedCount(unclaimed);
       }
     });
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        joinKeyboardSlot(0);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        removeKeyboardSlot(0);
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        cycleKeyboardProfile(-1);
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        cycleKeyboardProfile(1);
+        return;
+      }
+
+      const slot = keyboardSlotFromKey(event.code);
+      if (slot === null) return;
+      event.preventDefault();
+      toggleKeyboardSlot(slot);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    publishSlots();
+
     return () => {
+      window.removeEventListener("keydown", handleKeyDown);
       unsubscribe();
       unregisterTick();
     };
-  }, [ticker, setPairedSlots]);
+  }, [selectedGame?.players.max, ticker, setPairedSlots]);
 
   const minPlayers = selectedGame?.players.min ?? 1;
   const canStart = pairedSlots.length >= minPlayers;
@@ -137,7 +194,8 @@ export function PairingScreen() {
       </div>
 
       <p className="pairing-screen__hint">
-        <kbd>Enter</kbd> / <kbd>A</kbd> to join · <kbd>Esc</kbd> / <kbd>B</kbd> to leave · <kbd>←</kbd><kbd>→</kbd> to pick profile
+        <kbd>Enter</kbd> / <kbd>A</kbd> join · <kbd>Esc</kbd> / <kbd>B</kbd> leave · <kbd>←</kbd>
+        <kbd>→</kbd> profile · <kbd>1</kbd>-<kbd>4</kbd> keyboard
       </p>
 
       <div className="pairing-screen__actions">
@@ -154,4 +212,12 @@ export function PairingScreen() {
       )}
     </div>
   );
+}
+
+function keyboardSlotFromKey(code: string): number | null {
+  if (code === "Digit1") return 0;
+  if (code === "Digit2") return 1;
+  if (code === "Digit3") return 2;
+  if (code === "Digit4") return 3;
+  return null;
 }

@@ -15,6 +15,7 @@ export function StatsScreen() {
   return (
     <div className="screen stats-screen">
       <header className="stats-screen__header">
+        <img src="/icons/trophy.svg" alt="" aria-hidden="true" />
         <h2>Leaderboard</h2>
       </header>
 
@@ -27,7 +28,22 @@ export function StatsScreen() {
             const color = profile?.color;
             return (
               <li key={entry.profileId} className="stats-row">
-                <span className="stats-row__rank">#{i + 1}</span>
+                <span className="stats-row__rank">
+                  {i < 3 ? (
+                    <img
+                      src={
+                        [
+                          "/icons/medal-gold.svg",
+                          "/icons/medal-silver.svg",
+                          "/icons/medal-bronze.svg",
+                        ][i]
+                      }
+                      alt={`Rank ${i + 1}`}
+                    />
+                  ) : (
+                    `#${i + 1}`
+                  )}
+                </span>
                 {color && <span className="stats-row__dot" style={{ background: color }} />}
                 <span className="stats-row__name">{profileName(entry.profileId)}</span>
                 <span className="stats-row__wins">{entry.wins}W</span>

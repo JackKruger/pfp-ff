@@ -11,7 +11,13 @@ interface PlayerCardProps {
   controllerAvailable?: boolean;
 }
 
-export function PlayerCard({ slot, joined, profileName, profileColor, controllerAvailable }: PlayerCardProps) {
+export function PlayerCard({
+  slot,
+  joined,
+  profileName,
+  profileColor,
+  controllerAvailable,
+}: PlayerCardProps) {
   const slotColor = PLAYER_COLORS[slot] ?? "#888";
   const label = PLAYER_LABELS[slot] ?? `P${slot + 1}`;
 
@@ -33,9 +39,15 @@ export function PlayerCard({ slot, joined, profileName, profileColor, controller
           <p className="player-card__hint">← → change profile</p>
         </>
       ) : controllerAvailable ? (
-        <p className="player-card__hint">Press A to join</p>
+        <p className="player-card__hint player-card__hint--with-icon">
+          <img src="/icons/button-a.svg" alt="" aria-hidden="true" />
+          <span>Press A to join</span>
+        </p>
       ) : (
-        <p className="player-card__hint player-card__hint--dim">No controller</p>
+        <p className="player-card__hint player-card__hint--dim player-card__hint--with-icon">
+          <img src="/icons/gamepad.svg" alt="" aria-hidden="true" />
+          <span>No controller</span>
+        </p>
       )}
     </div>
   );

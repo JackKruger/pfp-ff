@@ -8,14 +8,15 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm --filter @pfp/shell dev",
-    "build": "pnpm -r --filter \"./packages/*\" --filter \"./apps/*\" build",
+    "dev": "pnpm -r --parallel --filter @pfp/shell --filter @pfp/raskulls dev",
+    "build": "pnpm -r --if-present --filter \"./packages/*\" build && pnpm -r --if-present --filter \"./games/*\" build && pnpm -r --if-present --filter \"./apps/*\" build",
     "test": "vitest run",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
     "prettier": "^3.3.3",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",

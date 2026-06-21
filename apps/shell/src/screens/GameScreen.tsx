@@ -22,15 +22,23 @@ export function GameScreen() {
 
   // Stable refs so tick / keyboard handlers always read current values.
   const phaseRef = useRef(phase);
-  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
   const overlayItemRef = useRef(overlayItem);
-  useEffect(() => { overlayItemRef.current = overlayItem; }, [overlayItem]);
+  useEffect(() => {
+    overlayItemRef.current = overlayItem;
+  }, [overlayItem]);
 
   // Snapshot pairedSlots / profiles at mount so changes don't re-run the iframe effect.
   const pairedSlotsRef = useRef(pairedSlots);
-  useEffect(() => { pairedSlotsRef.current = pairedSlots; }, [pairedSlots]);
+  useEffect(() => {
+    pairedSlotsRef.current = pairedSlots;
+  }, [pairedSlots]);
   const profilesRef = useRef(profiles);
-  useEffect(() => { profilesRef.current = profiles; }, [profiles]);
+  useEffect(() => {
+    profilesRef.current = profiles;
+  }, [profiles]);
 
   // Timeout: if the game doesn't call ready() within 8 s, show an error.
   useEffect(() => {
@@ -39,7 +47,7 @@ export function GameScreen() {
     return () => clearTimeout(timer);
   }, [phase]);
 
-  // Controller: Start = toggle overlay; in overlay, ↑↓/A/B navigate.
+  // Controller: Start = toggle overlay; in overlay, up/down/A/B navigate.
   useEffect(() => {
     return ticker.onTick(() => {
       const poller = ticker.poller;
@@ -74,8 +82,12 @@ export function GameScreen() {
     const onKey = (e: KeyboardEvent) => {
       const p = phaseRef.current;
       if (e.key === "Escape") {
-        if (p === "playing") { setPhase("overlay"); setOverlayItem("resume"); }
-        else if (p === "overlay") setPhase("playing");
+        if (p === "playing") {
+          setPhase("overlay");
+          setOverlayItem("resume");
+        } else if (p === "overlay") {
+          setPhase("playing");
+        }
         return;
       }
       if (p === "overlay") {
@@ -92,20 +104,35 @@ export function GameScreen() {
     return () => window.removeEventListener("keydown", onKey);
   }, [navigate]);
 
-  // Wire the SDK host when the iframe loads.
-  // Deps omit pairedSlots / profiles — those are read via refs so profile edits
-  // or lobby state changes don't tear down an in-progress game.
+  // Wire the SDK host before assigning iframe.src so early ready() is not missed.
+  // Deps omit pairedSlots / profiles because those are read via refs.
   useEffect(() => {
     const iframe = iframeRef.current;
     const game = selectedGame;
     if (!iframe || !game) return;
 
-    const handleLoad = () => {
-      if (!iframe.contentWindow) return;
+    setPhase("loading");
+    setOverlayItem("resume");
 
-      const host = createIframeHost(iframe, { sdkRange: game.sdk });
-      hostRef.current = host;
+    let closed = false;
+    const host = createIframeHost(iframe, { sdkRange: game.sdk });
+    hostRef.current = host;
 
+    const closeIframe = () => {
+      closed = true;
+      host.dispose();
+      if (hostRef.current === host) hostRef.current = null;
+      iframe.src = "about:blank";
+    };
+
+    const returnToShell = () => {
+      if (closed) return;
+      closeIframe();
+      navigate("home");
+    };
+
+    host.onReady(() => {
+      if (closed) return;
       const players = pairedSlotsRef.current.map((slot) => {
         const profile = profilesRef.current.find((p) => p.id === slot.profileId);
         return {
@@ -117,36 +144,44 @@ export function GameScreen() {
         };
       });
 
-      host.onReady(() => {
-        // launch first — if it throws, phase stays "loading" and the error is surfaced.
-        host.launch({ sessionId: crypto.randomUUID(), sdkVersion: SDK_VERSION, players, settings: {} });
-        setPhase("playing");
+      host.launch({
+        sessionId: crypto.randomUUID(),
+        sdkVersion: SDK_VERSION,
+        players,
+        settings: {},
       });
+      setPhase("playing");
+    });
 
-      host.onGameOver((result) => {
-        setPhase("done"); // block overlay; results navigation follows async
-        setResult(result);
-        recordMatch(result).catch(console.error);
-        host.dispose();
-        hostRef.current = null;
-      });
+    host.onGameOver((result) => {
+      if (closed) return;
+      closed = true;
+      setPhase("done");
+      setResult(result);
+      recordMatch(result).catch(console.error);
+      host.dispose();
+      if (hostRef.current === host) hostRef.current = null;
+    });
 
-      host.onError(({ message }) => {
-        console.error("Game error:", message);
-        setPhase("error");
-      });
-    };
-
-    iframe.addEventListener("load", handleLoad);
+    host.onRequestExit(returnToShell);
+    host.onError(({ message }) => {
+      console.error("Game error:", message);
+      returnToShell();
+    });
+    host.onIncompatible((info) => {
+      console.error("Game SDK incompatible:", info);
+      returnToShell();
+    });
     iframe.src = game.entry;
 
     return () => {
-      iframe.removeEventListener("load", handleLoad);
-      hostRef.current?.dispose();
-      hostRef.current = null;
+      if (!closed) host.terminate();
+      closed = true;
+      host.dispose();
+      if (hostRef.current === host) hostRef.current = null;
       iframe.src = "about:blank";
     };
-  }, [selectedGame, setResult, recordMatch]);
+  }, [selectedGame, setResult, recordMatch, navigate]);
 
   if (!selectedGame) {
     return (
@@ -164,7 +199,7 @@ export function GameScreen() {
       {/* Loading indicator */}
       {phase === "loading" && (
         <div className="game-screen__loading">
-          <div className="boot-loading__spinner" />
+          <img className="boot-loading__splash" src="/boot-splash.png" alt="" />
           <p>Loading {selectedGame.name}…</p>
         </div>
       )}

@@ -12,12 +12,18 @@ import { StatsScreen } from "./screens/StatsScreen.js";
 function ScreenRouter() {
   const { screen } = useShell();
   switch (screen) {
-    case "home":     return <HomeScreen />;
-    case "profiles": return <ProfilesScreen />;
-    case "pairing":  return <PairingScreen />;
-    case "game":     return <GameScreen />;
-    case "results":  return <ResultsScreen />;
-    case "stats":    return <StatsScreen />;
+    case "home":
+      return <HomeScreen />;
+    case "profiles":
+      return <ProfilesScreen />;
+    case "pairing":
+      return <PairingScreen />;
+    case "game":
+      return <GameScreen />;
+    case "results":
+      return <ResultsScreen />;
+    case "stats":
+      return <StatsScreen />;
   }
 }
 
@@ -41,12 +47,30 @@ function GlobalInput({ ticker }: { ticker: ShellTicker }) {
     return ticker.onTick(() => {
       const poller = ticker.poller;
       for (const idx of poller.connectedIndices()) {
-        if (poller.justPressed(idx, "up"))    { focus.navigate("up");    return; }
-        if (poller.justPressed(idx, "down"))  { focus.navigate("down");  return; }
-        if (poller.justPressed(idx, "left"))  { focus.navigate("left");  return; }
-        if (poller.justPressed(idx, "right")) { focus.navigate("right"); return; }
-        if (poller.justPressed(idx, "a"))     { focus.select();          return; }
-        if (poller.justPressed(idx, "b"))     { focus.back();            return; }
+        if (poller.justPressed(idx, "up")) {
+          focus.navigate("up");
+          return;
+        }
+        if (poller.justPressed(idx, "down")) {
+          focus.navigate("down");
+          return;
+        }
+        if (poller.justPressed(idx, "left")) {
+          focus.navigate("left");
+          return;
+        }
+        if (poller.justPressed(idx, "right")) {
+          focus.navigate("right");
+          return;
+        }
+        if (poller.justPressed(idx, "a")) {
+          focus.select();
+          return;
+        }
+        if (poller.justPressed(idx, "b")) {
+          focus.back();
+          return;
+        }
       }
     });
   }, [ticker, focus, screen]);
@@ -57,14 +81,29 @@ function GlobalInput({ ticker }: { ticker: ShellTicker }) {
     if (screen === "game" || screen === "pairing") return;
 
     const KEY_TO_DIR: Record<string, FocusDirection> = {
-      ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
+      ArrowUp: "up",
+      ArrowDown: "down",
+      ArrowLeft: "left",
+      ArrowRight: "right",
     };
 
     const onKey = (e: KeyboardEvent) => {
       const dir = KEY_TO_DIR[e.key];
-      if (dir) { e.preventDefault(); focus.navigate(dir); return; }
-      if (e.key === "Enter") { e.preventDefault(); focus.select(); return; }
-      if (e.key === "Escape") { e.preventDefault(); focus.back(); return; }
+      if (dir) {
+        e.preventDefault();
+        focus.navigate(dir);
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        focus.select();
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        focus.back();
+        return;
+      }
     };
 
     window.addEventListener("keydown", onKey);
@@ -90,7 +129,7 @@ export function App() {
   if (!dataReady) {
     return (
       <div className="boot-loading">
-        <div className="boot-loading__spinner" />
+        <img className="boot-loading__splash" src="/boot-splash.png" alt="" />
         <p>Loading…</p>
       </div>
     );
