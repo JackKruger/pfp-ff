@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel --filter @pfp/shell --filter @pfp/raskulls --filter @pfp/pong --filter @pfp/space-invaders dev",
+    "dev": "pnpm -r --parallel --filter @pfp/shell --filter @pfp/raskulls --filter @pfp/pong --filter @pfp/space-invaders --filter @pfp/iron-yard dev",
     "build": "pnpm -r --if-present --filter \"./packages/*\" build && pnpm -r --if-present --filter \"./games/*\" build && pnpm -r --if-present --filter \"./apps/*\" build",
     "test": "vitest run",
     "typecheck": "pnpm -r typecheck",

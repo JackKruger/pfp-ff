@@ -5,6 +5,12 @@ const pongEntry = import.meta.env.DEV ? "http://localhost:5175/" : "/games/pong/
 const spaceInvadersEntry = import.meta.env.DEV
   ? "http://localhost:5176/"
   : "/games/space-invaders/index.html";
+const ironYardEntry = import.meta.env.DEV
+  ? "http://localhost:5177/"
+  : "/games/iron-yard/index.html";
+const partyMixEntry = import.meta.env.DEV
+  ? "http://localhost:5178/"
+  : "/games/party-mix/index.html";
 
 /** Local extension: tracks games that aren't implemented yet. */
 export interface GameEntry extends GameManifest {
@@ -82,16 +88,36 @@ export const GAMES: GameEntry[] = [
     disabled: true,
   },
   {
+    id: "iron-yard",
+    name: "Iron Yard",
+    version: "0.1.0",
+    engine: "web",
+    entry: ironYardEntry,
+    players: { min: 1, max: 4 },
+    sdk: "^1.0.0",
+    tags: ["fighting", "medieval", "physics"],
+    statKeys: {
+      kills: { label: "Kills", scope: "player" },
+      deaths: { label: "Deaths", scope: "player" },
+    },
+  },
+  {
     id: "party-mix",
     name: "Party Mix",
-    version: "0.0.0",
+    version: "0.1.0",
     engine: "web",
-    entry: "/games/party-mix/index.html",
+    entry: partyMixEntry,
     thumbnail: "/thumbnails/party-mix.png",
     players: { min: 2, max: 4 },
     sdk: "^1.0.0",
     tags: ["party", "mini-games"],
-    disabled: true,
+    statKeys: {
+      stars: { label: "Stars", scope: "player" },
+      coins: { label: "Coins", scope: "player" },
+      minigamesWon: { label: "Minigames Won", scope: "player" },
+      rounds: { label: "Rounds", scope: "match" },
+      durationMs: { label: "Duration", scope: "match" },
+    },
   },
 ];
 
