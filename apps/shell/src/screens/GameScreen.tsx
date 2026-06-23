@@ -309,7 +309,7 @@ export function GameScreen() {
           <Btn id="game-error-home" onClick={() => navigate("home")} autoFocus>
             ← Back to Menu
           </Btn>
-          <p className="game-screen__error-hint">A / Enter · B / Esc to return</p>
+          <p className="game-screen__error-hint">Ⓐ or Ⓑ to return</p>
         </div>
       )}
 
@@ -340,7 +340,7 @@ export function GameScreen() {
             >
               ✕ Quit to Menu
             </button>
-            <p className="game-overlay__hint">↑↓ navigate · A select · B / Esc resume</p>
+            <p className="game-overlay__hint">↕ navigate · Ⓐ select · Ⓑ resume</p>
           </div>
         </div>
       )}

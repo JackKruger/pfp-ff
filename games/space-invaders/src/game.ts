@@ -183,6 +183,8 @@ export interface PlayerInput {
 export interface InputFrame {
   inputs: PlayerInput[];
   anyStart: boolean;
+  /** Edge: any player tapped Fire this frame. Used to leave the attract screen. */
+  anyFire?: boolean;
 }
 
 function shipSpawnX(index: number, playerCount: number): number {
@@ -813,7 +815,9 @@ export function advance(
 
   switch (state.phase) {
     case "attract":
-      if (frame.anyStart) {
+      // Start on Fire (the shell reserves the Start button for its pause menu),
+      // or on Start when running standalone via keyboard.
+      if (frame.anyStart || frame.anyFire) {
         state.wave = 1;
         state.phase = "wavetransition";
         state.waveBannerTimer = WAVE_BANNER_MS;

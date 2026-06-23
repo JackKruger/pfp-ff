@@ -692,7 +692,7 @@ function drawOverlays(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.shadowBlur = 10;
     ctx.font = `600 28px ${FONT}`;
     ctx.fillStyle = "rgba(6, 182, 212, 0.9)";
-    ctx.fillText("Press Start to play", ARENA_W / 2, ARENA_H / 2 + 120);
+    ctx.fillText("Press Fire to play", ARENA_W / 2, ARENA_H / 2 + 120);
     ctx.restore();
 
     // Controls

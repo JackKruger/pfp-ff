@@ -28,6 +28,7 @@ for (const k of [...START_KEYS, ...BACK_KEYS]) ALL_GAME_KEYS.add(k);
 export class InputReader {
   private keys = new Set<string>();
   private prevStartGlobal = false;
+  private prevFireGlobal = false;
 
   private onKeyDown = (e: KeyboardEvent) => {
     if (ALL_GAME_KEYS.has(e.key)) e.preventDefault();
@@ -68,10 +69,14 @@ export class InputReader {
 
     const startNow = kbStart || gamepadStart;
     anyStart = startNow && !this.prevStartGlobal;
-
     this.prevStartGlobal = startNow;
 
-    return { inputs, anyStart };
+    // Fire edge — any player currently holding shoot (gamepad A or keyboard).
+    const fireNow = inputs.some((i) => i.shoot);
+    const anyFire = fireNow && !this.prevFireGlobal;
+    this.prevFireGlobal = fireNow;
+
+    return { inputs, anyStart, anyFire };
   }
 
   private readPlayer(padIndex: number, playerIdx: number): PlayerInput {

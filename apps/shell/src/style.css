@@ -250,7 +250,7 @@ body::before {
   align-items: stretch;
   min-height: 0;
   flex: 0 0 auto;
-  height: 230px;
+  height: clamp(170px, 24vh, 200px);
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
   border-radius: 16px;
   overflow: hidden;
@@ -331,6 +331,26 @@ body::before {
 .hero__art-icon {
   font-size: 6rem;
   filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.5));
+}
+
+/* Short viewports: tighten the hero so the Play button never clips out the bottom. */
+@media (max-height: 720px) {
+  .hero {
+    height: clamp(150px, 22vh, 180px);
+  }
+  .hero__body {
+    padding: 16px 24px;
+    gap: 6px;
+  }
+  .hero__title {
+    font-size: 1.9rem;
+  }
+  .hero__blurb {
+    display: none;
+  }
+  .hero__actions {
+    margin-top: 4px;
+  }
 }
 
 /* ── Filter tabs ───────────────────────────────────────────── */
@@ -682,8 +702,8 @@ body::before {
 }
 
 .player-card {
-  width: 160px;
-  min-height: 200px;
+  width: 220px;
+  min-height: 280px;
   background: var(--surface);
   border: 3px solid var(--border);
   border-radius: var(--radius);
@@ -708,15 +728,15 @@ body::before {
 }
 
 .player-card__badge {
-  width: 48px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: var(--player-color, var(--border));
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 1rem;
+  font-size: 1.3rem;
 }
 
 .player-card__profile {
@@ -735,10 +755,10 @@ body::before {
 .player-card__name {
   font-weight: 700;
   text-align: center;
-  font-size: 0.95rem;
+  font-size: 1.15rem;
 }
 .player-card__hint {
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   color: var(--text-dim);
   text-align: center;
   line-height: 1.4;

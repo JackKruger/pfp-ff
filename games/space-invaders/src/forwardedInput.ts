@@ -36,8 +36,10 @@ export class ForwardedInputReader {
     const inputs: PlayerInput[] = players.map((player) => this.readPlayer(player.slot));
     const anyStart =
       fresh && players.some((player) => this.source.justPressed(player.slot, "start"));
+    const anyFire =
+      fresh && players.some((player) => this.source.justPressed(player.slot, "shoot"));
 
-    return { inputs, anyStart };
+    return { inputs, anyStart, anyFire };
   }
 
   private readPlayer(slot: number): PlayerInput {

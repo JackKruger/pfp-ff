@@ -29,6 +29,13 @@ export function PairingScreen() {
     profilesRef.current = profiles;
   }, [profiles]);
 
+  // Stable refs so the controller tick can start the game without re-subscribing.
+  const canStartRef = useRef(false);
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
+
   useEffect(() => {
     const maxPlayers = selectedGame?.players.max ?? 4;
     const lobby = new PairingLobby({ maxPlayers });
@@ -119,6 +126,16 @@ export function PairingScreen() {
         unclaimedCountRef.current = unclaimed;
         setUnclaimedCount(unclaimed);
       }
+
+      // 4. Any joined controller can press Start to launch once enough players are in.
+      if (canStartRef.current) {
+        for (const slot of slots) {
+          if (poller.justPressed(slot.gamepadIndex, "start")) {
+            navigateRef.current("game");
+            return;
+          }
+        }
+      }
     });
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -163,6 +180,7 @@ export function PairingScreen() {
 
   const minPlayers = selectedGame?.players.min ?? 1;
   const canStart = canStartGame(pairedSlots.length, minPlayers);
+  canStartRef.current = canStart;
   const slotCount = selectedGame?.players.max ?? 4;
 
   // How many unjoinable slots have controllers available for them.
@@ -200,8 +218,7 @@ export function PairingScreen() {
       </div>
 
       <p className="pairing-screen__hint">
-        <kbd>Enter</kbd> / <kbd>A</kbd> join · <kbd>Esc</kbd> / <kbd>B</kbd> leave · <kbd>←</kbd>
-        <kbd>→</kbd> profile · <kbd>1</kbd>-<kbd>4</kbd> keyboard
+        Ⓐ join · Ⓑ leave · ◀ ▶ profile · Start to begin
       </p>
 
       <div className="pairing-screen__actions">

@@ -278,6 +278,12 @@ describe("lifecycle", () => {
     expect(s.phase).toBe("wavetransition");
   });
 
+  it("transitions attract → wavetransition on fire (shell reserves Start)", () => {
+    const s = createGame(ctx(1));
+    advance(s, 16, { inputs: [{ ...IDLE }], anyStart: false, anyFire: true });
+    expect(s.phase).toBe("wavetransition");
+  });
+
   it("transitions wavetransition → playing after banner timer", () => {
     const s = createGame(ctx(1));
     // Trigger attract → wavetransition

@@ -3,7 +3,17 @@
 
 import * as THREE from "three";
 import { createGameClient, type LaunchContext, type GameResult } from "@pfp/sdk";
-import { CONFIG, weaponStats } from "./config";
+import {
+  CONFIG,
+  weaponStats,
+  ATTACK_POSES,
+  ATTACK_PHASES,
+  REST_BY_KEY,
+  poseLerp,
+  easeInSlow,
+  easeOutFast,
+  easeInOut,
+} from "./config";
 import { spawnPoints, weaponRacks, obstacles } from "./arena";
 import {
   makePlayer,
@@ -24,6 +34,50 @@ import { v } from "./math";
 
 // Player colors
 const PLAYER_COLORS = [0x9aa0a8, 0xc44b3c, 0x3c7ac4, 0x4ba34b];
+
+// How fast the right stick turns a human player to face (radians/second).
+const HUMAN_TURN_RATE = 3.2;
+
+/**
+ * Drives a human player's weapon tip through a swing arc while an attack is in
+ * progress. Mirrors the bot's `chooseBotAttackTip` so player strikes actually
+ * build tip velocity (and therefore register hits). The attack phase machine in
+ * `tick()` owns phase/timing; this only computes the tip pose for the phase.
+ */
+function humanSwingTip(p: Player, now: number): { x: number; y: number; z: number } {
+  const backhand = p.attackType === "backhand";
+  const typeKey = backhand || !p.attackType ? "swing" : p.attackType;
+  const poses = ATTACK_POSES[typeKey] ?? ATTACK_POSES.swing;
+  const phases = ATTACK_PHASES[typeKey] ?? ATTACK_PHASES.swing;
+  const rest = REST_BY_KEY[p.weaponKey] ?? REST_BY_KEY.arming;
+  const elapsed = now - p.attackStartMs;
+
+  let pose;
+  if (p.attackPhase === "windup") {
+    pose = poseLerp(rest, poses.chamber, easeInSlow(Math.min(1, elapsed / phases.windup)));
+  } else if (p.attackPhase === "release") {
+    const ue = easeOutFast(Math.min(1, elapsed / phases.release));
+    pose =
+      ue < 0.5
+        ? poseLerp(poses.chamber, poses.contact, ue / 0.5)
+        : poseLerp(poses.contact, poses.end, (ue - 0.5) / 0.5);
+  } else {
+    pose = poseLerp(poses.end, rest, easeInOut(Math.min(1, elapsed / phases.recovery)));
+  }
+
+  // Backhand is a mirrored swing — flip the sideways component.
+  const side = backhand ? -pose.side : pose.side;
+  const reach = weaponOf(p).length;
+  const fx = -Math.sin(p.yaw),
+    fz = -Math.cos(p.yaw);
+  const rx = Math.cos(p.yaw),
+    rz = -Math.sin(p.yaw);
+  return {
+    x: p.pos.x + rx * (side * 0.6) + fx * (pose.fwd * reach),
+    y: p.pos.y + 1.4 + pose.up * 0.6,
+    z: p.pos.z + rz * (side * 0.6) + fz * (pose.fwd * reach),
+  };
+}
 
 export interface GameConfig {
   botCount: number;
@@ -406,6 +460,13 @@ export class Game {
       } else if (!p.bot && !frozen) {
         input = this.input.getInput(p.id, p.yaw);
 
+        // Turn to face with the right stick X so players can aim their attacks.
+        const turn = input.aimDX || 0;
+        if (Math.abs(turn) > 0.001) {
+          p.yaw -= turn * HUMAN_TURN_RATE * dt;
+        }
+        input.yaw = p.yaw;
+
         // Issue 1: Compute weapon tip target from right stick aim + player position
         const fx = -Math.sin(p.yaw),
           fz = -Math.cos(p.yaw);
@@ -415,15 +476,14 @@ export class Game {
         const armLen = 0.6;
         const maxReach = w.length + 1.2;
 
-        // Use aimDX/aimDY from input to offset the tip
-        const aimDX = input.aimDX || 0;
+        // Right stick Y raises/lowers the resting guard; X is reserved for turning.
         const aimDY = input.aimDY || 0;
         const aimSpeed = CONFIG.AIM_TIP_SPEED;
 
         // Calculate tip relative to player with aim offset
-        let tipX = p.pos.x + fx * w.length * armLen + rx * aimDX * aimSpeed;
+        let tipX = p.pos.x + fx * w.length * armLen;
         let tipY = p.pos.y + 1.4 + aimDY * aimSpeed * 0.6;
-        let tipZ = p.pos.z + fz * w.length * armLen + rz * aimDX * aimSpeed;
+        let tipZ = p.pos.z + fz * w.length * armLen;
 
         // Clamp to max reach
         const dx = tipX - p.pos.x;
@@ -462,7 +522,13 @@ export class Game {
         };
       }
       applyInput(p, input, dtMs);
-      p.weaponTipTarget = { x: p.weaponTip.x, y: p.weaponTip.y, z: p.weaponTip.z };
+      // While a human attack is mid-swing, drive the tip through the strike arc
+      // so it builds the velocity combat needs. Bots animate their own tip.
+      if (!p.bot && p.attackPhase !== "idle") {
+        p.weaponTipTarget = humanSwingTip(p, now);
+      } else {
+        p.weaponTipTarget = { x: p.weaponTip.x, y: p.weaponTip.y, z: p.weaponTip.z };
+      }
     }
 
     // 2) Sync physics bodies + drive swords
@@ -792,8 +858,8 @@ export class Game {
     // Advance attack state machine for all players
     for (const p of this.players.values()) {
       if (p.attackPhase === "idle" || !p.alive) continue;
-      const atkType = p.attackType || "swing";
-      const phases = { windup: 380, release: 240, recovery: 320 };
+      const atkType = p.attackType === "backhand" || !p.attackType ? "swing" : p.attackType;
+      const phases = ATTACK_PHASES[atkType] ?? ATTACK_PHASES.swing;
       const dur = phases[p.attackPhase] || 380;
       if (now - p.attackStartMs >= dur) {
         if (p.attackPhase === "windup") {
