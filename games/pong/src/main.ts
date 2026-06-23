@@ -1,13 +1,17 @@
 import "./style.css";
 import { createGameClient } from "@pfp/sdk";
 import type { LaunchContext } from "@pfp/sdk";
+import { createControlClient } from "@pfp/controls";
 import { advance, createGame, type GameState } from "./game.js";
 import { render } from "./render.js";
 import { InputReader } from "./input.js";
+import { ForwardedInputReader } from "./forwardedInput.js";
 import { PongAudio } from "./audio.js";
 
 const client = createGameClient();
 const input = new InputReader();
+const controls = createControlClient(client);
+const forwarded = new ForwardedInputReader(controls);
 const audio = new PongAudio();
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -38,6 +42,7 @@ client.onResume(() => {
 client.onTerminate(() => {
   cancelAnimationFrame(raf);
   input.dispose();
+  controls.dispose();
   client.dispose();
 });
 
@@ -61,7 +66,9 @@ function loop(now: number): void {
 
   if (!paused) {
     const [p1Pad, p2Pad] = [ctxLaunch.players[0].gamepadIndex, ctxLaunch.players[1].gamepadIndex];
-    const frame = input.sample(p1Pad, p2Pad);
+    // Prefer shell-forwarded frames; fall back to direct gamepad/keyboard
+    // polling when running standalone (no shell sending frames).
+    const frame = forwarded.sample() ?? input.sample(p1Pad, p2Pad);
     if (frame.p1.start || frame.p2.start) audio.unlock();
 
     const standings = advance(state, dt, frame.p1, frame.p2);

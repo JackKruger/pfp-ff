@@ -2,9 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import {
   SDK_VERSION,
   attachMockGame,
+  createGameClient,
   createLinkedHostAndClient,
+  makeEnvelope,
+  ShellToGame,
+  type ControlButton,
+  type ControlButtonState,
+  type ControlFrame,
+  type Envelope,
   type GameResult,
   type LaunchContext,
+  type Transport,
 } from "../src/index.js";
 
 function launchContext(): LaunchContext {
@@ -15,6 +23,83 @@ function launchContext(): LaunchContext {
     players: [
       { slot: 0, profileId: "p1", displayName: "Ann", color: "#f00", gamepadIndex: 0 },
       { slot: 1, profileId: "p2", displayName: "Bob", color: "#00f", gamepadIndex: 1 },
+    ],
+  };
+}
+
+function releasedButton(): ControlButtonState {
+  return {
+    pressed: false,
+    justPressed: false,
+    justReleased: false,
+    value: 0,
+  };
+}
+
+function controlFrame(seq = 1): ControlFrame {
+  const buttons = Object.fromEntries(
+    (
+      [
+        "a",
+        "b",
+        "x",
+        "y",
+        "lb",
+        "rb",
+        "lt",
+        "rt",
+        "start",
+        "back",
+        "up",
+        "down",
+        "left",
+        "right",
+      ] satisfies ControlButton[]
+    ).map((button) => [button, releasedButton()]),
+  ) as Record<ControlButton, ControlButtonState>;
+
+  buttons.a = {
+    pressed: true,
+    justPressed: true,
+    justReleased: false,
+    value: 1,
+  };
+
+  return {
+    seq,
+    now: 1000 + seq,
+    dtMs: 16.67,
+    paused: false,
+    players: [
+      {
+        slot: 0,
+        profileId: "p1",
+        connected: true,
+        source: "gamepad",
+        axes: {
+          moveX: 0.5,
+          moveY: -0.25,
+          aimX: 0,
+          aimY: 1,
+        },
+        buttons,
+        actions: {
+          jump: {
+            pressed: true,
+            justPressed: true,
+            justReleased: false,
+            value: 1,
+          },
+          aim: {
+            pressed: true,
+            justPressed: false,
+            justReleased: false,
+            value: 1,
+            x: 0.25,
+            y: -0.5,
+          },
+        },
+      },
     ],
   };
 }
@@ -89,6 +174,40 @@ describe("game contract handshake", () => {
     expect(onTerminate).toHaveBeenCalledOnce();
     expect(onExit).toHaveBeenCalledOnce();
     pair.dispose();
+  });
+
+  it("relays input frames and clears listeners on dispose", async () => {
+    const pair = createLinkedHostAndClient();
+    const onInputFrame = vi.fn();
+    const frame = controlFrame();
+
+    pair.client.onInputFrame(onInputFrame);
+    pair.host.sendInputFrame(frame);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(onInputFrame).toHaveBeenCalledOnce();
+    expect(onInputFrame).toHaveBeenCalledWith(frame);
+
+    pair.dispose();
+
+    let handler: ((message: Envelope) => void) | undefined;
+    const transport: Transport = {
+      post: vi.fn(),
+      subscribe(callback) {
+        handler = callback;
+        return vi.fn();
+      },
+      dispose: vi.fn(),
+    };
+    const client = createGameClient(transport);
+    const onDisposedInputFrame = vi.fn();
+
+    client.onInputFrame(onDisposedInputFrame);
+    client.dispose();
+    handler?.(makeEnvelope(ShellToGame.INPUT_FRAME, controlFrame(2)));
+
+    expect(onDisposedInputFrame).not.toHaveBeenCalled();
   });
 
   it("flags an incompatible SDK range on ready", async () => {

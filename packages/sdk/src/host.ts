@@ -6,7 +6,7 @@
 import { Emitter } from "./emitter.js";
 import { GameToShell, ShellToGame, makeEnvelope, type Envelope } from "./protocol.js";
 import { createWindowTransport, type Transport } from "./transport.js";
-import type { GameResult, LaunchContext } from "./types.js";
+import type { ControlFrame, GameResult, LaunchContext } from "./types.js";
 import { SDK_VERSION, satisfies } from "./version.js";
 
 export interface GameHostOptions {
@@ -23,6 +23,7 @@ export interface GameHost {
   pause(): void;
   resume(): void;
   terminate(): void;
+  sendInputFrame(frame: ControlFrame): void;
 
   onReady(callback: (info: { sdkVersion: string }) => void): () => void;
   onGameOver(callback: (result: GameResult) => void): () => void;
@@ -76,6 +77,9 @@ export function createGameHost(transport: Transport, options: GameHostOptions = 
     },
     terminate() {
       transport.post(makeEnvelope(ShellToGame.TERMINATE, undefined));
+    },
+    sendInputFrame(frame) {
+      transport.post(makeEnvelope(ShellToGame.INPUT_FRAME, frame));
     },
     onReady: (callback) => ready.add(callback),
     onGameOver: (callback) => gameOver.add(callback),

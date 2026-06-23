@@ -1,13 +1,17 @@
 import "./style.css";
 import { createGameClient } from "@pfp/sdk";
 import type { LaunchContext } from "@pfp/sdk";
+import { createControlClient } from "@pfp/controls";
 import { advance, createGame, type GameState } from "./game.js";
 import { render } from "./render.js";
 import { InputReader } from "./input.js";
+import { ForwardedInputReader } from "./forwardedInput.js";
 import { SIAudio } from "./audio.js";
 
 const client = createGameClient();
 const input = new InputReader();
+const controls = createControlClient(client);
+const forwarded = new ForwardedInputReader(controls);
 const audio = new SIAudio();
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -38,6 +42,7 @@ client.onResume(() => {
 client.onTerminate(() => {
   cancelAnimationFrame(raf);
   input.dispose();
+  controls.dispose();
   audio.dispose();
   client.dispose();
 });
@@ -61,7 +66,9 @@ function loop(now: number): void {
   last = now;
 
   if (!paused) {
-    const frame = input.sample(ctxLaunch.players);
+    // Prefer shell-forwarded frames; fall back to direct gamepad/keyboard
+    // polling when running standalone (no shell sending frames).
+    const frame = forwarded.sample(ctxLaunch.players) ?? input.sample(ctxLaunch.players);
     if (frame.anyStart) audio.unlock();
 
     const standings = advance(state, dt, frame);

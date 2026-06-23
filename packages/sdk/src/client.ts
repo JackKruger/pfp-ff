@@ -6,7 +6,7 @@
 import { Emitter } from "./emitter.js";
 import { GameToShell, ShellToGame, makeEnvelope, type Envelope } from "./protocol.js";
 import { createParentTransport, type Transport } from "./transport.js";
-import type { GameResult, LaunchContext } from "./types.js";
+import type { ControlFrame, GameResult, LaunchContext } from "./types.js";
 import { SDK_VERSION } from "./version.js";
 
 export interface GameClient {
@@ -23,6 +23,7 @@ export interface GameClient {
   onPause(callback: () => void): () => void;
   onResume(callback: () => void): () => void;
   onTerminate(callback: () => void): () => void;
+  onInputFrame(callback: (frame: ControlFrame) => void): () => void;
 
   dispose(): void;
 }
@@ -36,6 +37,7 @@ export function createGameClient(transport: Transport = createParentTransport())
   const pause = new Emitter();
   const resume = new Emitter();
   const terminate = new Emitter();
+  const inputFrame = new Emitter<[ControlFrame]>();
 
   const unsubscribe = transport.subscribe((message: Envelope) => {
     switch (message.type) {
@@ -50,6 +52,9 @@ export function createGameClient(transport: Transport = createParentTransport())
         break;
       case ShellToGame.TERMINATE:
         terminate.emit();
+        break;
+      case ShellToGame.INPUT_FRAME:
+        inputFrame.emit(message.payload);
         break;
     }
   });
@@ -71,12 +76,14 @@ export function createGameClient(transport: Transport = createParentTransport())
     onPause: (callback) => pause.add(callback),
     onResume: (callback) => resume.add(callback),
     onTerminate: (callback) => terminate.add(callback),
+    onInputFrame: (callback) => inputFrame.add(callback),
     dispose() {
       unsubscribe();
       launch.clear();
       pause.clear();
       resume.clear();
       terminate.clear();
+      inputFrame.clear();
       transport.dispose();
     },
   };

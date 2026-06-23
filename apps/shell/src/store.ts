@@ -88,5 +88,43 @@ export const useShell = create<ShellState>((set, get) => ({
     set((s) => ({ matches: [record, ...s.matches] }));
     const { screen } = get();
     if (screen === "game") get().navigate("results");
+
+    const updatedProfiles = await updateProfilesLastPlayedAt(
+      participatingProfileIds(result),
+      result.endedAt,
+    );
+    if (updatedProfiles.length > 0) {
+      set((s) => ({ profiles: mergeUpdatedProfiles(s.profiles, updatedProfiles) }));
+    }
   },
 }));
+
+function participatingProfileIds(result: GameResult): string[] {
+  const ids = new Set<string>();
+  for (const standing of result.standings) {
+    if (standing.profileId !== null) ids.add(standing.profileId);
+  }
+  return [...ids];
+}
+
+async function updateProfilesLastPlayedAt(
+  profileIds: string[],
+  lastPlayedAt: number,
+): Promise<Profile[]> {
+  const updated = await Promise.all(
+    profileIds.map(async (profileId) => {
+      try {
+        return await dataStore.updateProfile(profileId, { lastPlayedAt });
+      } catch (error) {
+        console.warn(`Failed to update lastPlayedAt for profile "${profileId}"`, error);
+        return null;
+      }
+    }),
+  );
+  return updated.filter((profile): profile is Profile => profile !== null);
+}
+
+function mergeUpdatedProfiles(profiles: Profile[], updatedProfiles: Profile[]): Profile[] {
+  const updatedById = new Map(updatedProfiles.map((profile) => [profile.id, profile]));
+  return profiles.map((profile) => updatedById.get(profile.id) ?? profile);
+}

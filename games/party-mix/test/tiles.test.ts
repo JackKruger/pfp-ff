@@ -24,6 +24,10 @@ function frame(n: number, aIdx = -1): InputFrame {
   };
 }
 
+function isMoving(state: GameState): boolean {
+  return state.phase === "moving";
+}
+
 /** Drives the active player's turn so they land exactly `dist` tiles ahead. */
 function takeTurn(state: GameState, n: number, active: number, dist: number): void {
   state.phase = "turn";
@@ -38,7 +42,7 @@ function takeTurn(state: GameState, n: number, active: number, dist: number): vo
   expect(state.phase).toBe("moving");
   // run all the hops + the resolve window
   let guard = 0;
-  while (state.phase === "moving" && guard++ < 50) advance(state, 200, frame(n));
+  while (isMoving(state) && guard++ < 50) advance(state, 200, frame(n));
 }
 
 describe("star tile", () => {

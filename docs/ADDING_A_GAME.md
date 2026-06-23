@@ -4,6 +4,20 @@ This document is everything you need to build a game that runs inside the
 shell. There is no framework requirement — any web page that can run in an
 iframe and speak the postMessage contract below is a valid game.
 
+The current supported paths are **SDK-only** and **shell-forwarded controls**:
+a game imports `@pfp/sdk`, handles the lifecycle, and reports a result; it can
+either read its own input or receive normalized control frames from the shell.
+The planned game-kit path is documented in
+[`SHELL_ARCHITECTURE_IMPLEMENTATION_PLAN.md`](SHELL_ARCHITECTURE_IMPLEMENTATION_PLAN.md):
+
+- **SDK-only custom game:** best for Phaser, Three.js, Godot exports, or unusual
+  engines.
+- **Shell-forwarded controls game:** supported infrastructure where the shell
+  sends normalized control frames so the game does not poll devices directly.
+  See [`CONTROLS.md`](CONTROLS.md).
+- **Game-kit game:** planned starter runtime for small canvas games and future
+  AI-generated games.
+
 ---
 
 ## 1. File structure
@@ -13,8 +27,11 @@ Create a folder under `games/`:
 ```
 games/
   your-game/
+    game.manifest.ts ← metadata the shell uses for library + launch
     index.html      ← the page the shell loads in an iframe
-    game.ts         ← your entry point (or plain JS, or anything Vite can build)
+    src/main.ts     ← your entry point (or plain JS, or anything Vite can build)
+    package.json    ← needed for workspace builds/dev scripts
+    tsconfig.json   ← needed for TypeScript games
     vite.config.ts  ← only needed if you want a build step
 ```
 
@@ -22,31 +39,66 @@ If your game is a single HTML file with inline `<script>` tags you don't need
 Vite at all. If it has TypeScript or dependencies, add a minimal Vite config:
 
 ```ts
-// games/your-game/vite.config.ts
 import { defineConfig } from "vite";
-export default defineConfig({ base: "/games/your-game/" });
+
+export default defineConfig({
+  base: "/games/your-game/",
+  build: { outDir: "dist", emptyOutDir: true },
+  server: { port: 5179, strictPort: true },
+});
 ```
 
 ---
 
-## 2. Register the game with the shell
+## 2. Add the game manifest
 
-Add one entry to `apps/shell/src/games.ts`:
+Add `games/your-game/game.manifest.ts`:
 
 ```ts
-{
-  id: "your-game",          // kebab-case, must be unique
+import type { GameManifest } from "@pfp/sdk";
+
+const manifest = {
+  id: "your-game", // kebab-case, must be unique
   name: "Your Game",
   version: "0.1.0",
-  engine: "web",            // always "web" for TypeScript/HTML games
+  engine: "web", // "web" for TypeScript/HTML games
   entry: "/games/your-game/index.html",
-  players: { min: 2, max: 4 },  // how many players your game supports
+  players: { min: 2, max: 4 },
   sdk: "^1.0.0",
-  tags: ["party"],          // optional, shown on the card
-}
+  tags: ["party"],
+  input: { mode: "direct" },
+  presentation: {
+    category: "party",
+    accent: "#c084fc",
+    icon: "🎮",
+    blurb: "One short sentence for the shell library.",
+  },
+  build: {
+    packageName: "@pfp/your-game",
+    devPort: 5179,
+    built: true,
+  },
+} satisfies GameManifest;
+
+export default manifest;
 ```
 
-That's it — the shell will show the game in the menu and know how to launch it.
+Current shell catalog imports are still explicit, so after adding a manifest,
+wire it into `apps/shell/src/games.ts`. A later catalog-generation step will
+remove that manual shell edit.
+
+For an enabled production game, also add the id to `BUILT_GAME_IDS` in
+`apps/shell/src/buildGames.ts`. The shell build copies only those game `dist/`
+folders into `apps/shell/dist/games/*`.
+
+For local development, either run the game's dev server separately:
+
+```sh
+pnpm --filter @pfp/your-game dev
+```
+
+or add it to the root `pnpm dev` filters if you want it to start with the shell.
+The shell uses `manifest.build.devPort` to point at that dev server.
 
 ---
 
@@ -84,9 +136,9 @@ When the game ends:
 ```ts
 client.gameOver({
   gameId: "your-game",
-  sessionId: context.sessionId,   // pass back what you received in launch
-  startedAt: matchStartTime,      // epoch ms
-  endedAt: Date.now(),            // epoch ms
+  sessionId: context.sessionId, // pass back what you received in launch
+  startedAt: matchStartTime, // epoch ms
+  endedAt: Date.now(), // epoch ms
   standings: [
     { slot: 0, profileId: context.players[0].profileId, rank: 1, score: 11 },
     { slot: 1, profileId: context.players[1].profileId, rank: 2, score: 7 },
@@ -102,18 +154,18 @@ The shell handles routing to the Results screen — you don't navigate away.
 
 ```ts
 interface LaunchContext {
-  sessionId: string;       // unique per match, pass it back in GameResult
-  sdkVersion: string;      // "1.0.0"
+  sessionId: string; // unique per match, pass it back in GameResult
+  sdkVersion: string; // "1.0.0"
   players: PlayerSlot[];
-  settings: Record<string, unknown>;  // reserved, ignore for now
+  settings: Record<string, unknown>; // reserved, ignore for now
 }
 
 interface PlayerSlot {
-  slot: number;            // 0 = P1, 1 = P2, etc.
-  profileId: string | null;// null = guest
-  displayName: string;     // e.g. "Ann" or "P1"
-  color: string;           // hex colour assigned to this player, e.g. "#ef4444"
-  gamepadIndex: number;    // pass to navigator.getGamepads()[gamepadIndex]
+  slot: number; // 0 = P1, 1 = P2, etc.
+  profileId: string | null; // null = guest
+  displayName: string; // e.g. "Ann" or "P1"
+  color: string; // hex colour assigned to this player, e.g. "#ef4444"
+  gamepadIndex: number; // pass to navigator.getGamepads()[gamepadIndex]
 }
 ```
 
@@ -123,10 +175,11 @@ contiguous if someone left and rejoined.
 
 ---
 
-## 5. Reading controller input
+## 5. Reading controller input directly
 
-The shell does **not** forward controller events to you — the Gamepad API is
-available directly inside the iframe. Use `gamepadIndex` from the player slot:
+Direct input is still a good default for custom engines and games that need raw
+device state. The Gamepad API is available inside the iframe; use
+`gamepadIndex` from each player slot:
 
 ```ts
 function readInput(gamepadIndex: number) {
@@ -138,22 +191,22 @@ function readInput(gamepadIndex: number) {
 
 Button layout (W3C standard mapping, all Xbox controllers):
 
-| Index | Name    | Xbox label       |
-|-------|---------|------------------|
-| 0     | A       | A (bottom face)  |
-| 1     | B       | B (right face)   |
-| 2     | X       | X (left face)    |
-| 3     | Y       | Y (top face)     |
-| 4     | LB      | Left bumper      |
-| 5     | RB      | Right bumper     |
-| 6     | LT      | Left trigger (analog 0–1) |
-| 7     | RT      | Right trigger (analog 0–1)|
-| 8     | Back    | View / Back      |
-| 9     | Start   | Menu / Start     |
-| 12    | D-Up    | D-pad up         |
-| 13    | D-Down  | D-pad down       |
-| 14    | D-Left  | D-pad left       |
-| 15    | D-Right | D-pad right      |
+| Index | Name    | Xbox label                 |
+| ----- | ------- | -------------------------- |
+| 0     | A       | A (bottom face)            |
+| 1     | B       | B (right face)             |
+| 2     | X       | X (left face)              |
+| 3     | Y       | Y (top face)               |
+| 4     | LB      | Left bumper                |
+| 5     | RB      | Right bumper               |
+| 6     | LT      | Left trigger (analog 0–1)  |
+| 7     | RT      | Right trigger (analog 0–1) |
+| 8     | Back    | View / Back                |
+| 9     | Start   | Menu / Start               |
+| 12    | D-Up    | D-pad up                   |
+| 13    | D-Down  | D-pad down                 |
+| 14    | D-Left  | D-pad left                 |
+| 15    | D-Right | D-pad right                |
 
 Axes: `pad.axes[0]` = left stick X, `pad.axes[1]` = left stick Y,
 `pad.axes[2]` = right stick X, `pad.axes[3]` = right stick Y.
@@ -174,35 +227,85 @@ function gameTick() {
 
 ---
 
-## 6. The `GameResult` you must send back
+## 6. Receiving shell-forwarded controls
+
+If your manifest uses `input.mode: "forwarded"` or `"hybrid"`, the shell creates
+a control forwarder for the game. Direct-input games do not receive frames.
+Pong currently uses `"hybrid"` as the reference migration path: shell-forwarded
+frames in the shell, with direct input kept as a standalone-dev fallback.
+
+Manifest example:
+
+```ts
+input: {
+  mode: "forwarded",
+  actions: {
+    move: [{ source: "leftStickX", deadzone: 0.2 }],
+    jump: [{ source: "a" }],
+    fire: [{ source: "rt" }],
+  },
+}
+```
+
+Game-side usage:
+
+```ts
+import { createGameClient } from "@pfp/sdk";
+import { createControlClient } from "@pfp/controls";
+
+const client = createGameClient();
+const controls = createControlClient(client);
+
+controls.onFrame((frame) => {
+  const p1 = frame.players.find((player) => player.slot === 0);
+  if (!p1) return;
+
+  const moveX = p1.actions.move?.value ?? 0;
+  const jump = p1.actions.jump?.justPressed ?? false;
+  const fire = p1.actions.fire?.pressed ?? false;
+});
+
+client.ready();
+```
+
+For simple games, prefer `forwarded` once the game can run inside the shell. For
+custom engines that need raw browser input, use `direct`. Use `hybrid` during a
+migration or when a game wants both shell-level actions and engine-specific raw
+input.
+
+---
+
+## 7. The `GameResult` you must send back
 
 ```ts
 interface GameResult {
-  gameId: string;           // must match the id in games.ts
-  sessionId: string;        // from LaunchContext.sessionId
-  startedAt: number;        // epoch ms, when play began
-  endedAt: number;          // epoch ms, now
+  gameId: string; // must match the manifest id
+  sessionId: string; // from LaunchContext.sessionId
+  startedAt: number; // epoch ms, when play began
+  endedAt: number; // epoch ms, now
   standings: PlayerStanding[];
-  gameStats?: Record<string, unknown>;  // any freeform match-level data
+  gameStats?: Record<string, unknown>; // any freeform match-level data
+  achievements?: string[]; // optional game-detected achievement ids
 }
 
 interface PlayerStanding {
-  slot: number;             // from PlayerSlot.slot
+  slot: number; // from PlayerSlot.slot
   profileId: string | null; // from PlayerSlot.profileId
-  rank: number;             // 1 = winner; ties share a rank (both get rank 1)
-  score?: number;           // optional numeric score shown on the results screen
-  stats?: Record<string, number>;  // optional freeform per-player stats
+  rank: number; // 1 = winner; ties share a rank (both get rank 1)
+  score?: number; // optional numeric score shown on the results screen
+  stats?: Record<string, number>; // optional freeform per-player stats
 }
 ```
 
 Rules:
+
 - Every player who played must have a `PlayerStanding` (even if they quit early — give them last place).
 - `rank` starts at 1. Ties are fine: if two players draw, both get `rank: 1` and there is no `rank: 2`.
 - `score` is optional but will be shown on the results screen if provided.
 
 ---
 
-## 7. Optional: other lifecycle events
+## 8. Optional: other lifecycle events
 
 ```ts
 client.onPause(() => {
@@ -228,71 +331,73 @@ client.requestExit();
 
 ---
 
-## 8. Minimal working example
+## 9. Minimal working example
 
 A complete single-file game that immediately ends in a P1 win:
 
 ```html
 <!doctype html>
 <html>
-<body style="background:#000;color:#fff;font-family:sans-serif;display:grid;place-items:center;height:100vh">
-  <p id="msg">Loading…</p>
-  <script type="module">
-    // In a real game you'd: import { createGameClient } from "@pfp/sdk";
-    // For a self-contained file, paste the tiny shim below instead.
-    const CHANNEL = "pfp";
-    function post(type, payload) {
-      window.parent.postMessage({ channel: CHANNEL, type, payload }, "*");
-    }
-    function listen(handler) {
-      window.addEventListener("message", (e) => {
-        if (e.data?.channel === CHANNEL) handler(e.data);
-      });
-    }
-
-    let ctx = null;
-    const startedAt = Date.now();
-
-    listen((msg) => {
-      if (msg.type === "launch") {
-        ctx = msg.payload;
-        document.getElementById("msg").textContent =
-          `Playing with ${ctx.players.map(p => p.displayName).join(" vs ")}`;
-
-        // Pretend we played a 3-second game, then P1 wins.
-        setTimeout(() => {
-          post("gameOver", {
-            gameId: "your-game",
-            sessionId: ctx.sessionId,
-            startedAt,
-            endedAt: Date.now(),
-            standings: ctx.players.map((p, i) => ({
-              slot: p.slot,
-              profileId: p.profileId,
-              rank: i + 1,
-              score: 10 - i * 3,
-            })),
-          });
-        }, 3000);
+  <body
+    style="background:#000;color:#fff;font-family:sans-serif;display:grid;place-items:center;height:100vh"
+  >
+    <p id="msg">Loading…</p>
+    <script type="module">
+      // In a real game you'd: import { createGameClient } from "@pfp/sdk";
+      // For a self-contained file, paste the tiny shim below instead.
+      const CHANNEL = "pfp";
+      function post(type, payload) {
+        window.parent.postMessage({ channel: CHANNEL, type, payload }, "*");
       }
-    });
+      function listen(handler) {
+        window.addEventListener("message", (e) => {
+          if (e.data?.channel === CHANNEL) handler(e.data);
+        });
+      }
 
-    post("ready", { sdkVersion: "1.0.0" });
-  </script>
-</body>
+      let ctx = null;
+      const startedAt = Date.now();
+
+      listen((msg) => {
+        if (msg.type === "launch") {
+          ctx = msg.payload;
+          document.getElementById("msg").textContent =
+            `Playing with ${ctx.players.map((p) => p.displayName).join(" vs ")}`;
+
+          // Pretend we played a 3-second game, then P1 wins.
+          setTimeout(() => {
+            post("gameOver", {
+              gameId: "your-game",
+              sessionId: ctx.sessionId,
+              startedAt,
+              endedAt: Date.now(),
+              standings: ctx.players.map((p, i) => ({
+                slot: p.slot,
+                profileId: p.profileId,
+                rank: i + 1,
+                score: 10 - i * 3,
+              })),
+            });
+          }, 3000);
+        }
+      });
+
+      post("ready", { sdkVersion: "1.0.0" });
+    </script>
+  </body>
 </html>
 ```
 
 ---
 
-## 9. Using the TypeScript SDK (recommended)
+## 10. Using the TypeScript SDK (recommended)
 
 If your game has a build step, import the SDK package directly — it handles
 the postMessage boilerplate and gives you full types:
 
 ```ts
-// games/your-game/game.ts
-import { createGameClient } from "@pfp/sdk";
+// games/your-game/src/main.ts
+import { createGameClient, type LaunchContext } from "@pfp/sdk";
 
 const client = createGameClient();
 let context: LaunchContext;
@@ -307,9 +412,7 @@ client.onLaunch((ctx) => {
 client.ready(); // tell the shell we're ready
 
 function endGame(winnerSlot: number) {
-  const sorted = context.players
-    .slice()
-    .sort((a, b) => (a.slot === winnerSlot ? -1 : 1));
+  const sorted = context.players.slice().sort((a, b) => (a.slot === winnerSlot ? -1 : 1));
 
   client.gameOver({
     gameId: "your-game",
@@ -330,11 +433,34 @@ In `games/your-game/package.json`:
 ```json
 {
   "name": "@pfp/your-game",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5179",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4179",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@pfp/sdk": "workspace:*"
   }
+}
+```
+
+Add `"@pfp/controls": "workspace:*"` only if the game uses shell-forwarded
+controls.
+
+In `games/your-game/tsconfig.json`:
+
+```json
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "types": ["vitest/globals"]
+  },
+  "include": ["src", "test", "vite.config.ts"]
 }
 ```
 
@@ -343,10 +469,16 @@ In `games/your-game/package.json`:
 ## Summary checklist
 
 - [ ] `games/your-game/index.html` exists and is served at that path
-- [ ] Entry added to `apps/shell/src/games.ts` with matching `id` and `entry`
+- [ ] `games/your-game/game.manifest.ts` exists and uses `satisfies GameManifest`
+- [ ] `games/your-game/package.json` has `dev`, `build`, and `typecheck` scripts
+- [ ] Manifest wired into `apps/shell/src/games.ts` until catalog generation exists
+- [ ] Enabled production game id added to `apps/shell/src/buildGames.ts`
+- [ ] Root `pnpm dev` updated, or the game dev server is started separately
 - [ ] Game calls `client.ready()` (or posts `{ channel:"pfp", type:"ready", payload:{sdkVersion:"1.0.0"} }`)
 - [ ] Game handles the `launch` message and starts only then
+- [ ] Game handles `pause`, `resume`, and `terminate`
+- [ ] If using forwarded controls, manifest `input.mode` is `forwarded` or `hybrid`
 - [ ] Game calls `client.gameOver(result)` with a standing for every player
-- [ ] `result.gameId` matches the `id` in the registry
+- [ ] `result.gameId` matches the manifest `id`
 - [ ] `result.sessionId` matches `context.sessionId`
 - [ ] Every player has a `rank` (1 = winner)

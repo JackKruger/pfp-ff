@@ -2,7 +2,10 @@
 
 **Architecture & Implementation Plan**
 
-Status: Draft v0.1 — for review/iteration before code.
+Status: Active prototype. The shell, profiles, pairing, stats, manifest-backed
+game catalog, SDK lifecycle, and shell-forwarded controls infrastructure are
+implemented. The next shell/runtime work is tracked in
+[`SHELL_ARCHITECTURE_IMPLEMENTATION_PLAN.md`](SHELL_ARCHITECTURE_IMPLEMENTATION_PLAN.md).
 
 ---
 
@@ -43,6 +46,7 @@ plug in through a single, stable contract.
 | **Shell**          | The launcher app: game grid, profile select, controller pairing, stats, and the in-game host frame.                                     |
 | **Game**           | A plugin loaded by the shell into a sandboxed iframe. Native-TS or Godot-web-export.                                                    |
 | **Contract / SDK** | The versioned message protocol + types + helper libs that shell and games communicate through. The most important artifact in the repo. |
+| **Controls**       | Optional shell-forwarded normalized input frames for games that opt into `forwarded` or `hybrid` input mode.                            |
 | **Profile**        | A persistent player identity: name, color, avatar.                                                                                      |
 | **Slot**           | A player position in a match (P1–P4), bound to one controller and (optionally) one profile.                                             |
 | **Match record**   | The immutable result of one game played, the source of truth for all stats.                                                             |
@@ -99,13 +103,19 @@ pfp-ff/
 │  ├─ sdk/                   # THE contract: types, game-side client, shell-side host
 │  ├─ input/                 # controller service: polling, pairing, pad↔slot, hot-plug
 │  ├─ data/                  # persistence: profiles + match records (IndexedDB now)
-│  └─ ui/                    # shared UI: controller-focus navigation, theme, widgets
+│  ├─ ui/                    # shared UI: controller-focus navigation, theme, widgets
+│  ├─ controls/              # optional shell-forwarded input frames
+│  └─ game-kit/              # planned: small-game runtime for generated games
 ├─ apps/
 │  └─ shell/                 # the launcher app (Vite)
 └─ games/
    ├─ pong/                  # reference native-TS game — proves the contract
-   ├─ _template-web/         # starter for new native-TS games
-   └─ _template-godot/       # starter + shim for Godot HTML5 exports
+   ├─ space-invaders/        # native-TS co-op arcade game
+   ├─ raskulls/              # Phaser race/challenge prototype
+   ├─ iron-yard/             # Three.js/Rapier brawler port
+   ├─ party-mix/             # parked native-TS party prototype
+   ├─ _template-sdk/         # planned starter for custom SDK-only games
+   └─ _template-game-kit/    # planned starter for generated game-kit games
 ```
 
 **Tooling:** pnpm workspaces · TypeScript (strict) · Vite (build/dev) · ESLint +
@@ -117,43 +127,61 @@ Prettier · Vitest for unit tests.
 
 Everything else is replaceable; this is the part we design carefully and version.
 
-### 5.1 Game manifest — `game.json`
+### 5.1 Game manifest — `game.manifest.ts`
 
 Each game ships a manifest the shell uses to populate the grid and validate
-player counts.
+player counts. Current manifests are TypeScript files under
+`games/*/game.manifest.ts` and use `satisfies GameManifest` for type checking.
 
-```jsonc
-{
-  "id": "pong", // unique, stable, kebab-case
-  "name": "Pong",
-  "version": "1.0.0",
-  "engine": "web", // "web" | "godot"
-  "entry": "index.html", // loaded into the iframe
-  "players": { "min": 2, "max": 2 },
-  "thumbnail": "thumb.png",
-  "tags": ["arcade", "versus"],
-  "sdk": "^1.0.0", // contract version the game targets
+```ts
+import type { GameManifest } from "@pfp/sdk";
 
-  // OPTIONAL: declare the stat keys this game emits, so stat screens and
-  // achievements can reference them by name with nice labels. Stats stay
-  // freeform at runtime — this is just metadata, not a hard schema.
-  "statKeys": {
-    "kos": { "label": "KOs", "scope": "player" },
-    "falls": { "label": "Falls", "scope": "player" },
+const manifest = {
+  id: "pong",
+  name: "Pong",
+  version: "0.1.0",
+  engine: "web",
+  entry: "/games/pong/index.html",
+  players: { min: 2, max: 2 },
+  thumbnail: "/thumbnails/pong.png",
+  tags: ["classic", "2-player"],
+  sdk: "^1.0.0",
+  statKeys: {
+    score: { label: "Score", scope: "player" },
+    durationMs: { label: "Duration", scope: "match" },
   },
-
-  // OPTIONAL: per-game achievements (see §7.2). Can be added any time later
-  // and back-filled from existing match history.
-  "achievements": [
-    {
-      "id": "first-blood",
-      "name": "First Blood",
-      "description": "Win your first match.",
-      "points": 10,
+  input: {
+    mode: "hybrid",
+    actions: {
+      paddle: [{ source: "leftStickY", deadzone: 0.18 }, { source: "dpadY" }],
+      start: [{ source: "start" }],
+      back: [{ source: "b" }],
     },
-  ],
-}
+  },
+  presentation: {
+    category: "classic",
+    accent: "#4f9dff",
+    icon: "🏓",
+    blurb: "The original duel. First to outlast your rival across the neon table.",
+  },
+  build: {
+    packageName: "@pfp/pong",
+    devPort: 5175,
+    built: true,
+  },
+} satisfies GameManifest;
+
+export default manifest;
 ```
+
+The shell catalog currently imports manifests explicitly from
+`apps/shell/src/games.ts`. A future catalog-generation step should remove that
+manual edit.
+
+Enabled production games also need their id in `apps/shell/src/buildGames.ts`,
+because the shell Vite build copies only those game `dist/` folders into the
+final shell bundle. During development, the root `pnpm dev` script starts only
+the games listed in its filters; other game dev servers can be run separately.
 
 ### 5.2 Launch context — Shell → Game
 
@@ -193,11 +221,45 @@ interface PlayerSlot {
 | `launch` | Carries `LaunchContext`; start the match. |
 | `pause` / `resume` | Shell-driven pause (e.g. controller disconnect overlay). |
 | `terminate` | Shell is tearing the game down now. |
+| `inputFrame` | Optional normalized input frame for games using shell-forwarded controls. |
 
 A minimal handshake: game loads → `ready` → shell sends `launch` → game runs →
 `gameOver`.
 
-### 5.4 Result & stats schema — the normalizing insight
+### 5.4 Shell-forwarded input frames
+
+Games can choose one of three input modes in their manifest:
+
+```ts
+type GameInputMode = "direct" | "forwarded" | "hybrid";
+```
+
+- `direct`: the shell passes `gamepadIndex` in `LaunchContext`; the game polls
+  `navigator.getGamepads()` directly.
+- `forwarded`: the shell sends normalized `ControlFrame` messages through the
+  SDK. The game uses `@pfp/controls` and does not need direct Gamepad API code.
+- `hybrid`: the shell sends frames, and the game may also poll devices directly.
+
+The shell starts a control forwarder only for `forwarded` or `hybrid` games.
+The forwarder pauses, resumes, and disposes with the SDK host lifecycle.
+
+```ts
+interface ControlFrame {
+  seq: number;
+  now: number;
+  dtMs: number;
+  paused: boolean;
+  players: ControlPlayerFrame[];
+}
+```
+
+`@pfp/controls` provides:
+
+- `createControlFrame(...)` for building frames from the shell poller.
+- `createControlForwarder(...)` for shell-side forwarding.
+- `createControlClient(...)` for game-side frame subscription and action helpers.
+
+### 5.5 Result & stats schema — the normalizing insight
 
 The trick that lets the platform understand _every_ game without knowing its
 rules: **every match reduces to a ranking plus optional per-player stats.**
@@ -240,7 +302,7 @@ This gives us two layers for free:
   **achievements (§7.2)** can be added later — and computed _retroactively_ over
   history, because nothing was thrown away.
 
-### 5.5 Versioning
+### 5.6 Versioning
 
 The contract is semver'd (`sdkVersion`). The host checks a game's `sdk` range in
 its manifest and warns on mismatch. Additive changes = minor; breaking changes =
@@ -248,9 +310,11 @@ major with a compatibility shim where feasible.
 
 ---
 
-## 6. Input / controller system (`@pfp/input`)
+## 6. Input and controls (`@pfp/input`, `@pfp/controls`)
 
 The genuinely tricky, couch-specific part — built once, shared by everything.
+
+### 6.1 Device polling and pairing (`@pfp/input`)
 
 - **Source:** the browser **Gamepad API** (`navigator.getGamepads()`), polled
   each animation frame. Xbox controllers map cleanly to the "standard" gamepad
@@ -263,8 +327,8 @@ The genuinely tricky, couch-specific part — built once, shared by everything.
   claims the next free slot (P1–P4); pressing B leaves. Then each joined slot
   picks a profile (or "Guest").
 - **Pad ↔ slot assignment** is owned by the shell and passed to the game in
-  `LaunchContext`. In-game, a game reads its assigned `gamepadIndex` directly
-  (or via an SDK input helper).
+  `LaunchContext`. Direct-input games read their assigned `gamepadIndex`
+  directly.
 - **Hot-plug / disconnect:** listen to `gamepadconnected` /
   `gamepaddisconnected`. Mid-match disconnect → shell sends `pause` and shows a
   _"Controller N disconnected — reconnect to continue"_ overlay; reconnect →
@@ -274,6 +338,38 @@ The genuinely tricky, couch-specific part — built once, shared by everything.
 > mapping, rumble support is limited/inconsistent). Mitigation: the
 > normalization layer + a small "controller test" screen, and validate early on
 > the real target hardware.
+
+### 6.2 Shell-forwarded controls (`@pfp/controls`)
+
+`@pfp/controls` is optional infrastructure for games that do not want to read
+the Gamepad API directly. The shell builds normalized `ControlFrame` objects
+from its existing `InputPoller` and sends them through the SDK `inputFrame`
+message. See [`CONTROLS.md`](CONTROLS.md) for the focused API reference.
+
+Current pieces:
+
+- `createControlFrame(...)` maps normalized gamepad state into per-player axes,
+  buttons, and named action states.
+- `createControlForwarder(...)` sends sequenced frames from the shell host to a
+  game host and tracks pause state.
+- `createControlClient(...)` gives games a latest-frame cache plus helpers like
+  `axis(slot, action)` and `justPressed(slot, action)`.
+
+The shell only starts the forwarder when a manifest opts into:
+
+```ts
+input: {
+  mode: "forwarded",
+}
+// or
+input: {
+  mode: "hybrid",
+}
+```
+
+Pong currently uses `hybrid` input as the reference migration path: the shell
+forwards normalized frames when it hosts the game, while Pong keeps direct input
+as a standalone-dev fallback. Other existing games remain on `direct` input.
 
 ---
 
@@ -387,17 +483,23 @@ however they want; see §10.)
 
 ## 9. Game integration paths
 
-All three speak the same contract; they differ only in how they're built.
+All paths speak the same contract; they differ only in how they're built.
 
 1. **Native TypeScript game** — a small Vite app importing `@pfp/sdk`'s game
-   client. Renders to its own canvas/WebGL however it likes. Start from
-   `games/_template-web/`.
-2. **Godot game** — built in the Godot editor, **exported to HTML5/WebAssembly**.
+   client. Renders to its own canvas/WebGL however it likes. Current games in
+   this path include Pong, Space Invaders, and Party Mix.
+2. **Shell-forwarded controls game** — a web game importing `@pfp/sdk` and
+   `@pfp/controls`. The shell supplies normalized control frames, reducing
+   repeated input boilerplate for future small games.
+3. **Godot game** — built in the Godot editor, **exported to HTML5/WebAssembly**.
    A ~20-line JS shim bridges Godot signals ↔ SDK `postMessage`. Start from
-   `games/_template-godot/`. To the shell it's indistinguishable from a native
-   game.
-3. **External / friends' games** — any web bundle that speaks the protocol drops
-   into `games/` with a `game.json`. No shell changes needed.
+   the planned `games/_template-sdk/`. To the shell it's indistinguishable from
+   a native game.
+4. **Game-kit game** — planned path for generated/small 2D canvas games using
+   `@pfp/game-kit` on top of `@pfp/sdk` and `@pfp/controls`.
+5. **External / friends' games** — any web bundle that speaks the protocol drops
+   into `games/` with a `game.manifest.ts`. Today it still needs an explicit
+   shell catalog import; catalog generation should remove that later.
 
 > **Vibecoding note:** logic-driven games (Pong, snake, button-mashers) I can
 > build end-to-end. For anything visual/feel-heavy — in either native canvas

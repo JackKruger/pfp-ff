@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@pfp/controls": "workspace:*",
     "@pfp/data": "workspace:*",
     "@pfp/input": "workspace:*",
     "@pfp/sdk": "workspace:*",

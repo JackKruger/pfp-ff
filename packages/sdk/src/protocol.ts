@@ -2,7 +2,7 @@
  * The wire protocol: message names and the envelope that namespaces our messages
  * so foreign postMessage traffic (browser extensions, other libraries) is ignored.
  */
-import type { GameResult, LaunchContext } from "./types.js";
+import type { ControlFrame, GameResult, LaunchContext } from "./types.js";
 
 /** Every PFP message carries this channel tag; anything else is ignored. */
 export const CHANNEL = "pfp" as const;
@@ -21,6 +21,7 @@ export const ShellToGame = {
   PAUSE: "pause",
   RESUME: "resume",
   TERMINATE: "terminate",
+  INPUT_FRAME: "inputFrame",
 } as const;
 
 export type GameToShellType = (typeof GameToShell)[keyof typeof GameToShell];
@@ -36,6 +37,7 @@ export interface MessagePayloads {
   [ShellToGame.PAUSE]: undefined;
   [ShellToGame.RESUME]: undefined;
   [ShellToGame.TERMINATE]: undefined;
+  [ShellToGame.INPUT_FRAME]: ControlFrame;
 }
 
 export interface EnvelopeFor<T extends keyof MessagePayloads> {

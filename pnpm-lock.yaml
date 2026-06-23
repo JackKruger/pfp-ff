@@ -29,6 +29,9 @@ importers:
 
   apps/shell:
     dependencies:
+      '@pfp/controls':
+        specifier: workspace:*
+        version: link:../../packages/controls
       '@pfp/data':
         specifier: workspace:*
         version: link:../../packages/data
@@ -91,6 +94,9 @@ importers:
 
   games/pong:
     dependencies:
+      '@pfp/controls':
+        specifier: workspace:*
+        version: link:../../packages/controls
       '@pfp/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -109,9 +115,21 @@ importers:
 
   games/space-invaders:
     dependencies:
+      '@pfp/controls':
+        specifier: workspace:*
+        version: link:../../packages/controls
       '@pfp/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+
+  packages/controls:
+    dependencies:
+      '@pfp/input':
+        specifier: workspace:*
+        version: link:../input
+      '@pfp/sdk':
+        specifier: workspace:*
+        version: link:../sdk
 
   packages/data:
     dependencies:

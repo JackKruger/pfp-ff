@@ -29,6 +29,60 @@
 
 ---
 
+## Platform and shell hardening
+
+- [ ] Implement the shell architecture plan.
+  - Plan: `docs/SHELL_ARCHITECTURE_IMPLEMENTATION_PLAN.md`
+  - Scope: hardening, manifest cleanup, shell-forwarded controls, `@pfp/game-kit`, templates, and AI-generated game workflow.
+
+- [x] Wire the shell pause overlay to the SDK lifecycle.
+  - Files: `apps/shell/src/screens/GameScreen.tsx`, `apps/shell/test/`
+  - When the shell enters the in-game pause overlay, call `host.pause()`.
+  - When the player resumes, call `host.resume()` and reset timing in the game via existing SDK handlers.
+  - Add focused coverage so Start/Esc pause and resume cannot regress.
+
+- [x] Restore a green repository typecheck.
+  - Files: `games/party-mix/test/tiles.test.ts`
+  - Fix the TypeScript narrowing issue around the `state.phase === "moving"` loop.
+  - Keep the existing star-tile behavior tests intact.
+
+- [x] Make build confidence match typecheck confidence.
+  - Files: `package.json`, game package scripts under `games/*/package.json`, app package scripts under `apps/*/package.json`
+  - Ensure CI/release flow runs `pnpm typecheck` before or as part of build.
+  - Prefer `tsc && vite build` for workspace packages that ship TypeScript games/apps.
+
+- [x] Update profile recency when matches are recorded.
+  - Files: `apps/shell/src/store.ts`, `packages/data/src/types.ts`, `packages/data/test/`, `apps/shell/test/`
+  - Use each recorded standing's `profileId` to update `Profile.lastPlayedAt`.
+  - Ignore guest/null profiles.
+  - Add tests for single-profile and multi-profile matches.
+
+- [x] Refresh project docs to match current state.
+  - Files: `README.md`, `TODO.md`, `docs/ARCHITECTURE.md`
+  - Replace the old "Status: Planning" language with the current shell/game status.
+  - List current playable, disabled, and in-progress games.
+  - Capture the next platform architecture direction before adding more games.
+
+- [x] Add typed game manifests and wire the shell catalog to them.
+  - Files: `packages/sdk/src/types.ts`, `games/*/game.manifest.ts`, `apps/shell/src/games.ts`, `apps/shell/test/shellRules.test.ts`
+  - Add optional manifest metadata for input mode, settings, presentation, and build/dev data.
+  - Move real game metadata into per-game manifests while keeping shell placeholders local.
+  - Preserve current shell `GameEntry` behavior and verify enabled games have build metadata.
+
+- [x] Add a minimal shell-forwarded controls prototype.
+  - Files: `packages/sdk/src/protocol.ts`, `packages/sdk/src/client.ts`, `packages/sdk/src/host.ts`, `packages/controls/`
+  - Add SDK `inputFrame` transport support from shell host to game client.
+  - Add `@pfp/controls` frame construction, forwarding, and game-side client helpers.
+  - Keep existing games on direct input until a later migration slice.
+
+- [x] Wire shell-forwarded controls into the game host lifecycle.
+  - Files: `apps/shell/src/screens/GameScreen.tsx`, `apps/shell/src/shellRules.ts`, `apps/shell/test/shellRules.test.ts`
+  - Start a control forwarder only for games with `input.mode` set to `forwarded` or `hybrid`.
+  - Pause/resume/dispose the forwarder with the SDK game lifecycle.
+  - Keep all current manifests on `direct` input so existing games do not change behavior.
+
+---
+
 ## Raskulls accuracy roadmap
 
 Goal: move `games/raskulls` from a lightweight Raskulls-inspired prototype toward a closer mechanical and presentation match for the original XBLA game, while staying within our local multiplayer party-shell constraints.

@@ -26,6 +26,144 @@ export interface AchievementDef {
   secret?: boolean;
 }
 
+/** How a game receives local player input from the shell/browser. */
+export type GameInputMode = "direct" | "forwarded" | "hybrid";
+
+/** Normalized input sources that can be mapped to named game actions. */
+export type GameInputSource =
+  | "leftStickX"
+  | "leftStickY"
+  | "rightStickX"
+  | "rightStickY"
+  | "dpadX"
+  | "dpadY"
+  | "a"
+  | "b"
+  | "x"
+  | "y"
+  | "lb"
+  | "rb"
+  | "lt"
+  | "rt"
+  | "start"
+  | "back";
+
+/** One mapping from a normalized input source to a game-specific action. */
+export interface GameActionBinding {
+  source: GameInputSource;
+  scale?: number;
+  deadzone?: number;
+}
+
+/** Optional input contract metadata for games that use shell-forwarded controls. */
+export interface GameInputManifest {
+  mode: GameInputMode;
+  actions?: Record<string, GameActionBinding[]>;
+  tickHz?: number;
+}
+
+export type ControlButton =
+  | "a"
+  | "b"
+  | "x"
+  | "y"
+  | "lb"
+  | "rb"
+  | "lt"
+  | "rt"
+  | "start"
+  | "back"
+  | "up"
+  | "down"
+  | "left"
+  | "right";
+
+export interface ControlButtonState {
+  pressed: boolean;
+  justPressed: boolean;
+  justReleased: boolean;
+  value: number;
+}
+
+export interface ControlActionState extends ControlButtonState {
+  x?: number;
+  y?: number;
+}
+
+export interface ControlPlayerFrame {
+  slot: number;
+  profileId: string | null;
+  connected: boolean;
+  source: "gamepad" | "keyboard" | "ai" | "none";
+  axes: {
+    moveX: number;
+    moveY: number;
+    aimX: number;
+    aimY: number;
+    throttle?: number;
+  };
+  buttons: Record<ControlButton, ControlButtonState>;
+  actions: Record<string, ControlActionState>;
+}
+
+export interface ControlFrame {
+  seq: number;
+  now: number;
+  dtMs: number;
+  paused: boolean;
+  players: ControlPlayerFrame[];
+}
+
+/** Optional user-configurable launch settings exposed by the shell. */
+export interface GameSettingsManifest {
+  fields: GameSettingDef[];
+}
+
+export type GameSettingDef =
+  | { id: string; label: string; type: "boolean"; default: boolean }
+  | {
+      id: string;
+      label: string;
+      type: "number";
+      min: number;
+      max: number;
+      step?: number;
+      default: number;
+    }
+  | {
+      id: string;
+      label: string;
+      type: "choice";
+      options: GameSettingOption[];
+      default: string;
+    };
+
+export interface GameSettingOption {
+  value: string;
+  label: string;
+}
+
+/** Filterable library categories shown by shell presentations. */
+export type GamePresentationCategory = "racing" | "classic" | "fighting" | "party";
+
+/** Optional shell-facing display metadata for a game library entry. */
+export interface GamePresentationManifest {
+  category?: GamePresentationCategory;
+  accent?: string;
+  icon?: string;
+  blurb?: string;
+  heroArt?: string;
+  featured?: boolean;
+  disabled?: boolean;
+}
+
+/** Optional build/dev metadata used by shell catalog tooling. */
+export interface GameBuildManifest {
+  packageName?: string;
+  devPort?: number;
+  built?: boolean;
+}
+
 /** `game.json` — what a game ships so the shell can list and launch it (§5.1). */
 export interface GameManifest {
   /** Unique, stable, kebab-case id. */
@@ -44,6 +182,14 @@ export interface GameManifest {
   statKeys?: Record<string, StatKeyDef>;
   /** Optional per-game achievements. */
   achievements?: AchievementDef[];
+  /** Optional input contract metadata. Existing games default to direct input. */
+  input?: GameInputManifest;
+  /** Optional launch settings schema. */
+  settings?: GameSettingsManifest;
+  /** Optional shell-facing presentation metadata. */
+  presentation?: GamePresentationManifest;
+  /** Optional build/dev metadata for catalog tooling. */
+  build?: GameBuildManifest;
 }
 
 /** One player position in a match, bound to a controller and (maybe) a profile. */

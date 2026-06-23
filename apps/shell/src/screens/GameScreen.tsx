@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  createControlForwarder,
+  schemaFromManifest,
+  KeyboardControlSource,
+  type ControlForwarder,
+} from "@pfp/controls";
 import { createIframeHost, SDK_VERSION } from "@pfp/sdk";
 import { Btn } from "../components/Btn.js";
 import { useShell } from "../store.js";
@@ -6,11 +12,17 @@ import { useShellTicker } from "../ticker.js";
 import type { GameHost } from "@pfp/sdk";
 import { PLAYER_COLORS } from "../games.js";
 import { recordMatchBestEffort } from "../gameOver.js";
+import { usesShellForwardedInput } from "../shellRules.js";
+import {
+  isGameScreenDeadEnd,
+  transitionGameScreenLifecycle,
+  type GameScreenLifecycleAction,
+  type GameScreenLifecycleState,
+  type GameScreenOverlayItem,
+  type GameScreenPhase,
+} from "./gameScreenLifecycle.js";
 
 // "done" = game over received; blocks overlay until results navigation fires.
-type Phase = "loading" | "playing" | "overlay" | "error" | "done";
-type OverlayItem = "resume" | "quit";
-
 const LOAD_TIMEOUT_MS = 8_000;
 
 export function GameScreen() {
@@ -18,9 +30,10 @@ export function GameScreen() {
   const ticker = useShellTicker();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const hostRef = useRef<GameHost | null>(null);
+  const controlForwarderRef = useRef<ControlForwarder | null>(null);
 
-  const [phase, setPhase] = useState<Phase>("loading");
-  const [overlayItem, setOverlayItem] = useState<OverlayItem>("resume");
+  const [phase, setPhase] = useState<GameScreenPhase>("loading");
+  const [overlayItem, setOverlayItem] = useState<GameScreenOverlayItem>("resume");
 
   // Stable refs so tick / keyboard handlers always read current values.
   const phaseRef = useRef(phase);
@@ -38,7 +51,37 @@ export function GameScreen() {
   useEffect(() => {
     selectedGameRef.current = selectedGame;
   }, [selectedGame]);
-  const isDeadEnd = () => !selectedGameRef.current || phaseRef.current === "error";
+  const lifecycleState = (): GameScreenLifecycleState => ({
+    hasSelectedGame: Boolean(selectedGameRef.current),
+    phase: phaseRef.current,
+    overlayItem: overlayItemRef.current,
+  });
+  const isDeadEnd = () => isGameScreenDeadEnd(lifecycleState());
+
+  const runLifecycleAction = useCallback(
+    (action: GameScreenLifecycleAction) => {
+      const transition = transitionGameScreenLifecycle(lifecycleState(), action);
+      if (transition.effect === "pause") {
+        hostRef.current?.pause();
+        controlForwarderRef.current?.setPaused(true);
+      }
+      if (transition.effect === "resume") {
+        hostRef.current?.resume();
+        controlForwarderRef.current?.setPaused(false);
+      }
+      if (transition.effect === "navigateHome") navigate("home");
+
+      if (transition.phase) {
+        phaseRef.current = transition.phase;
+        setPhase(transition.phase);
+      }
+      if (transition.overlayItem) {
+        overlayItemRef.current = transition.overlayItem;
+        setOverlayItem(transition.overlayItem);
+      }
+    },
+    [navigate],
+  );
 
   // Snapshot pairedSlots / profiles at mount so changes don't re-run the iframe effect.
   const pairedSlotsRef = useRef(pairedSlots);
@@ -69,19 +112,18 @@ export function GameScreen() {
             poller.justPressed(idx, "b") ||
             poller.justPressed(idx, "start")
           ) {
-            navigate("home");
+            runLifecycleAction("exitDeadEnd");
             return;
           }
           continue;
         }
         if (p === "playing" && poller.justPressed(idx, "start")) {
-          setPhase("overlay");
-          setOverlayItem("resume");
+          runLifecycleAction("requestPause");
           return;
         }
         if (p === "overlay") {
           if (poller.justPressed(idx, "b") || poller.justPressed(idx, "start")) {
-            setPhase("playing");
+            runLifecycleAction("requestResume");
             return;
           }
           if (poller.justPressed(idx, "up") || poller.justPressed(idx, "down")) {
@@ -89,29 +131,29 @@ export function GameScreen() {
             return;
           }
           if (poller.justPressed(idx, "a")) {
-            if (overlayItemRef.current === "quit") navigate("home");
-            else setPhase("playing");
+            runLifecycleAction("confirmOverlay");
             return;
           }
         }
       }
     });
-  }, [ticker, navigate]);
+  }, [ticker, navigate, runLifecycleAction]);
 
   // Keyboard: Escape = toggle overlay; Enter = confirm selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const p = phaseRef.current;
       if (isDeadEnd()) {
-        if (e.key === "Enter" || e.key === "Escape" || e.key === " ") navigate("home");
+        if (e.key === "Enter" || e.key === "Escape" || e.key === " ") {
+          runLifecycleAction("exitDeadEnd");
+        }
         return;
       }
       if (e.key === "Escape") {
         if (p === "playing") {
-          setPhase("overlay");
-          setOverlayItem("resume");
+          runLifecycleAction("requestPause");
         } else if (p === "overlay") {
-          setPhase("playing");
+          runLifecycleAction("requestResume");
         }
         return;
       }
@@ -120,14 +162,13 @@ export function GameScreen() {
           setOverlayItem((prev) => (prev === "resume" ? "quit" : "resume"));
         }
         if (e.key === "Enter") {
-          if (overlayItemRef.current === "quit") navigate("home");
-          else setPhase("playing");
+          runLifecycleAction("confirmOverlay");
         }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navigate]);
+  }, [runLifecycleAction]);
 
   // Wire the SDK host before assigning iframe.src so early ready() is not missed.
   // Deps omit pairedSlots / profiles because those are read via refs.
@@ -140,11 +181,20 @@ export function GameScreen() {
     setOverlayItem("resume");
 
     let closed = false;
+    let unregisterControlForwarder: (() => void) | null = null;
     const host = createIframeHost(iframe, { sdkRange: game.sdk });
     hostRef.current = host;
 
+    const disposeControlForwarder = () => {
+      unregisterControlForwarder?.();
+      unregisterControlForwarder = null;
+      controlForwarderRef.current?.dispose();
+      controlForwarderRef.current = null;
+    };
+
     const closeIframe = () => {
       closed = true;
+      disposeControlForwarder();
       host.dispose();
       if (hostRef.current === host) hostRef.current = null;
       iframe.src = "about:blank";
@@ -169,12 +219,32 @@ export function GameScreen() {
         };
       });
 
-      host.launch({
+      const context = {
         sessionId: crypto.randomUUID(),
         sdkVersion: SDK_VERSION,
         players,
         settings: {},
-      });
+      };
+
+      host.launch(context);
+      if (usesShellForwardedInput(game)) {
+        // Keyboard fallback so forwarded games stay playable in dev without a
+        // gamepad; it only fills slots whose controller is disconnected.
+        const keyboard = new KeyboardControlSource();
+        keyboard.attach();
+        const forwarder = createControlForwarder({
+          host,
+          poller: ticker.poller,
+          players,
+          schema: schemaFromManifest(game.input),
+          keyboard,
+          clock: () => performance.now(),
+        });
+        controlForwarderRef.current = forwarder;
+        unregisterControlForwarder = ticker.onTick(() => {
+          if (phaseRef.current === "playing") forwarder.sendFrame();
+        });
+      }
       setPhase("playing");
     });
 
@@ -185,6 +255,7 @@ export function GameScreen() {
       setResult(result);
       navigate("results");
       void recordMatchBestEffort(result, recordMatch);
+      disposeControlForwarder();
       host.dispose();
       if (hostRef.current === host) hostRef.current = null;
     });
@@ -203,11 +274,12 @@ export function GameScreen() {
     return () => {
       if (!closed) host.terminate();
       closed = true;
+      disposeControlForwarder();
       host.dispose();
       if (hostRef.current === host) hostRef.current = null;
       iframe.src = "about:blank";
     };
-  }, [selectedGame, setResult, recordMatch, navigate]);
+  }, [selectedGame, setResult, recordMatch, navigate, ticker]);
 
   if (!selectedGame) {
     return (
@@ -258,13 +330,13 @@ export function GameScreen() {
             <h2 className="game-overlay__title">Paused</h2>
             <button
               className={`game-overlay__item${overlayItem === "resume" ? " game-overlay__item--active" : ""}`}
-              onClick={() => setPhase("playing")}
+              onClick={() => runLifecycleAction("requestResume")}
             >
               ▶ Resume
             </button>
             <button
               className={`game-overlay__item${overlayItem === "quit" ? " game-overlay__item--active" : ""}`}
-              onClick={() => navigate("home")}
+              onClick={() => runLifecycleAction("requestQuitToHome")}
             >
               ✕ Quit to Menu
             </button>
