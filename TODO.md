@@ -3,25 +3,25 @@
 ## Playtest feedback (2026-06-23)
 
 ### Home page
-- [ ] Featured banner is slightly too tall — reduce height.
-- [ ] On smaller screens the "Play Now" button falls through the bottom of the banner — fix responsive layout.
+- [x] Featured banner is slightly too tall — reduce height.
+- [x] On smaller screens the "Play Now" button falls through the bottom of the banner — fix responsive layout.
 
 ### "Who's Playing" / pairing screen
-- [ ] Player cards are a little too small — increase card size.
-- [ ] No way to press the "Start Game" button with a controller — make it controller-reachable.
+- [x] Player cards are a little too small — increase card size.
+- [x] No way to press the "Start Game" button with a controller — any joined controller now presses Start to launch.
 
 ### Iron Yard
-- [ ] Only movement (and maybe sprint) works — wire up the remaining controls.
+- [x] Only movement (and maybe sprint) works — attacks now swing through a real arc (so they connect) and the right stick turns the player. (Jump/block/sprint already read the same gamepad path.)
 
 ### Space Invaders
-- [ ] Says "Press Start to play", but Start opens the pause menu instead of starting the game.
+- [x] Says "Press Start to play", but Start opens the pause menu — now starts on Fire.
 
 ### Single-player support
-- [ ] Raskulls should support 1 player.
-- [ ] Pong should support 1 player.
+- [x] Raskulls should support 1 player — manifest min is 1; race mode fills bots; results advance on Jump.
+- [x] Pong should support 1 player — synthesizes a CPU opponent; starts on Fire.
 
 ### Global
-- [ ] Remove keyboard navigation hints everywhere.
+- [x] Remove keyboard navigation hints — pairing/game-overlay/error hints are now controller-only.
 
 ---
 

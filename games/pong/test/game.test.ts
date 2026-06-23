@@ -86,6 +86,40 @@ describe("pong match flow", () => {
     expect(s.phase).toBe("serving");
   });
 
+  it("starts a serve when a player presses serve (fire)", () => {
+    const s = createGame(ctx());
+    advance(s, 16, { axis: 0, start: false, back: false, serve: true }, IDLE);
+    expect(s.phase).toBe("serving");
+  });
+
+  it("synthesizes a CPU opponent for a single human and reports only the human", () => {
+    const solo: LaunchContext = { ...ctx(), players: [ctx().players[0]] };
+    const s = createGame(solo);
+    expect(s.players).toHaveLength(2);
+    expect(s.players[1].cpu).toBe(true);
+
+    s.players[0].score = WIN_SCORE;
+    s.phase = "gameover";
+    s.goTimer = 0;
+    let standings = advance(s, 100, IDLE, IDLE);
+    for (let i = 0; i < 40 && standings === null; i++) standings = advance(s, 100, IDLE, IDLE);
+    expect(standings).toHaveLength(1);
+    expect(standings![0]).toMatchObject({ slot: 0, rank: 1 });
+  });
+
+  it("drives the CPU paddle toward an incoming ball", () => {
+    const solo: LaunchContext = { ...ctx(), players: [ctx().players[0]] };
+    const s = createGame(solo);
+    s.phase = "rally";
+    // Ball heading toward the CPU (right side), well below its centered paddle.
+    s.ball.x = ARENA_W / 2;
+    s.ball.y = ARENA_H - 60;
+    s.ball.vx = 400;
+    s.ball.vy = 0;
+    advance(s, 16, IDLE, IDLE);
+    expect(s.players[1].axis).toBeGreaterThan(0); // moving down toward the ball
+  });
+
   it("ends the match and ranks the higher score first", () => {
     const s = rallyState();
     s.players[0].score = WIN_SCORE - 1;

@@ -43,6 +43,7 @@ export class ForwardedInputReader {
       axis,
       start: fresh && this.source.justPressed(slot, "start"),
       back: fresh && this.source.justPressed(slot, "back"),
+      serve: fresh && this.source.justPressed(slot, "serve"),
     };
   }
 }

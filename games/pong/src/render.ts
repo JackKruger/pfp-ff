@@ -226,7 +226,7 @@ function drawOverlays(ctx: CanvasRenderingContext2D, state: GameState): void {
     } else {
       banner(ctx, "PONG", "#f8fafc", 120, ARENA_H / 2 - 60);
     }
-    banner(ctx, "Press Start to play", "rgba(226,232,240,0.9)", 38, ARENA_H / 2 + 70);
+    banner(ctx, "Press Fire to play", "rgba(226,232,240,0.9)", 38, ARENA_H / 2 + 70);
     banner(ctx, "P1: W / S      P2: ↑ / ↓", "rgba(148,163,184,0.7)", 26, ARENA_H / 2 + 128);
   } else if (state.phase === "serving" && state.serveTimer > 0) {
     banner(ctx, String(Math.ceil(state.serveTimer / 1000)), "#f8fafc", 140, ARENA_H / 2);

@@ -90,7 +90,13 @@ export class ResultsScene extends Phaser.Scene {
     const context = session.context;
     if (!context) return;
     session.input.tick();
-    if (context.players.some((player) => session.input.actionsFor(player).justStart)) {
+    // Advance on Jump too — the shell reserves Start for its pause menu.
+    if (
+      context.players.some((player) => {
+        const action = session.input.actionsFor(player);
+        return action.justStart || action.justJump;
+      })
+    ) {
       this.sendResult();
     }
     session.input.commit();

@@ -7,9 +7,9 @@ const manifest = {
   engine: "web",
   entry: "/games/pong/index.html",
   thumbnail: "/thumbnails/pong.png",
-  players: { min: 2, max: 2 },
+  players: { min: 1, max: 2 },
   sdk: "^1.0.0",
-  tags: ["classic", "2-player"],
+  tags: ["classic", "1-2 player"],
   statKeys: {
     score: { label: "Score", scope: "player" },
     durationMs: { label: "Duration", scope: "match" },
@@ -22,6 +22,7 @@ const manifest = {
       // -1 = up, +1 = down. Stick is deadzoned shell-side; d-pad snaps to ±1.
       paddle: [{ source: "leftStickY", deadzone: 0.18 }, { source: "dpadY" }],
       start: [{ source: "start" }],
+      serve: [{ source: "a" }],
       back: [{ source: "b" }],
     },
   },

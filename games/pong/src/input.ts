@@ -18,6 +18,7 @@ export class InputReader {
   private keys = new Set<string>();
   private prevStart: [boolean, boolean] = [false, false];
   private prevBack: [boolean, boolean] = [false, false];
+  private prevServe: [boolean, boolean] = [false, false];
 
   private onKeyDown = (e: KeyboardEvent) => {
     if (GAME_KEYS.has(e.key)) e.preventDefault();
@@ -49,6 +50,7 @@ export class InputReader {
     let axis = 0;
     let startHeld = false;
     let backHeld = false;
+    let serveHeld = false;
 
     if (pad) {
       const stick = pad.axes[1] ?? 0;
@@ -57,20 +59,24 @@ export class InputReader {
       if (pad.buttons[13]?.pressed) axis = 1; // d-pad down
       startHeld = pad.buttons[9]?.pressed ?? false; // Start / Menu
       backHeld = pad.buttons[1]?.pressed ?? false; // B
+      serveHeld = pad.buttons[0]?.pressed ?? false; // A
     }
 
     const up = idx === 0 ? this.keys.has("w") || this.keys.has("W") : this.keys.has("ArrowUp");
     const down = idx === 0 ? this.keys.has("s") || this.keys.has("S") : this.keys.has("ArrowDown");
     if (up) axis = -1;
     if (down) axis = 1;
-    if (this.keys.has("Enter") || this.keys.has(" ")) startHeld = true;
+    if (this.keys.has("Enter")) startHeld = true;
+    if (this.keys.has(" ")) serveHeld = true;
     if (this.keys.has("Escape")) backHeld = true;
 
     const start = startHeld && !this.prevStart[idx];
     const back = backHeld && !this.prevBack[idx];
+    const serve = serveHeld && !this.prevServe[idx];
     this.prevStart[idx] = startHeld;
     this.prevBack[idx] = backHeld;
+    this.prevServe[idx] = serveHeld;
 
-    return { axis: axis < -1 ? -1 : axis > 1 ? 1 : axis, start, back };
+    return { axis: axis < -1 ? -1 : axis > 1 ? 1 : axis, start, back, serve };
   }
 }

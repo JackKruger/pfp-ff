@@ -24,11 +24,13 @@ const TRAIL_LEN = 9;
 export type SoundKind = "wall" | "paddle" | "score" | "win";
 export type Phase = "attract" | "serving" | "rally" | "gameover";
 
-/** Per-player input for one frame. `start`/`back` are edge-triggered (this frame only). */
+/** Per-player input for one frame. `start`/`back`/`serve` are edge-triggered (this frame only). */
 export interface PlayerInput {
   axis: number; // -1 (up) .. +1 (down)
   start: boolean;
   back: boolean;
+  /** Fire/A — begins the match. The shell reserves Start for its pause menu. */
+  serve?: boolean;
 }
 
 export interface Player {
@@ -40,7 +42,13 @@ export interface Player {
   score: number;
   paddleY: number; // top of paddle
   axis: number;
+  /** AI-controlled opponent synthesized for single-player matches. */
+  cpu?: boolean;
 }
+
+// CPU paddle tuning — kept just shy of a human's reach so it's beatable.
+const CPU_DEADZONE = 14; // px of slack before the paddle bothers moving
+const CPU_MAX_AXIS = 0.9; // fraction of full paddle speed
 
 export interface Ball {
   x: number; // top-left
@@ -91,10 +99,26 @@ function makePlayer(p: LaunchContext["players"][number]): Player {
   };
 }
 
-export function createGame(context: LaunchContext): GameState {
-  const [a, b] = context.players;
+/** A synthetic AI opponent for single-player matches, seated opposite `human`. */
+function makeCpu(human: Player): Player {
   return {
-    players: [makePlayer(a), makePlayer(b)],
+    slot: human.slot === 1 ? 0 : 1,
+    profileId: null,
+    displayName: "CPU",
+    color: "#94a3b8",
+    gamepadIndex: -1,
+    score: 0,
+    paddleY: ARENA_H / 2 - PADDLE_H / 2,
+    axis: 0,
+    cpu: true,
+  };
+}
+
+export function createGame(context: LaunchContext): GameState {
+  const a = makePlayer(context.players[0]);
+  const b = context.players[1] ? makePlayer(context.players[1]) : makeCpu(a);
+  return {
+    players: [a, b],
     ball: { x: ARENA_W / 2 - BALL_SIZE / 2, y: ARENA_H / 2 - BALL_SIZE / 2, vx: 0, vy: 0 },
     phase: "attract",
     serveTimer: 0,
@@ -245,12 +269,14 @@ export function advance(
   const dt = Math.min(dtMs, 100); // clamp to avoid spiral of death
   state.players[0].axis = p1.axis;
   state.players[1].axis = p2.axis;
+  steerCpu(state);
 
   updateFx(state, dt);
 
   switch (state.phase) {
     case "attract":
-      if (p1.start || p2.start) startServe(state);
+      // Begin on Fire (shell-friendly) or Start (keyboard standalone).
+      if (p1.start || p2.start || p1.serve || p2.serve) startServe(state);
       break;
     case "serving":
       state.serveTimer -= dt;
@@ -276,6 +302,20 @@ export function advance(
       break;
   }
   return null;
+}
+
+/** Overrides any CPU player's axis to track the ball, ignoring its input slot. */
+function steerCpu(state: GameState): void {
+  state.players.forEach((p, idx) => {
+    if (!p.cpu) return;
+    const ball = state.ball;
+    const towardCpu = idx === 1 ? ball.vx > 0 : ball.vx < 0;
+    // Chase the ball only while it's incoming; otherwise recover to center.
+    const targetY =
+      state.phase === "rally" && towardCpu ? ball.y + BALL_SIZE / 2 : ARENA_H / 2;
+    const diff = targetY - (p.paddleY + PADDLE_H / 2);
+    p.axis = Math.abs(diff) < CPU_DEADZONE ? 0 : clamp(diff / 40, -1, 1) * CPU_MAX_AXIS;
+  });
 }
 
 /** Drains the fixed-step accumulator. Returns the scorer index for this frame, or -1. */
@@ -323,8 +363,8 @@ function onScore(state: GameState, scorer: 0 | 1): PlayerStanding[] | null {
 }
 
 export function standingsFor(state: GameState): PlayerStanding[] {
-  const [a, b] = state.players;
-  const ranked = a.score >= b.score ? [a, b] : [b, a];
+  // Only real players get standings; a single-player CPU opponent is omitted.
+  const ranked = state.players.filter((p) => !p.cpu).sort((a, b) => b.score - a.score);
   return ranked.map((p, i) => ({
     slot: p.slot,
     profileId: p.profileId,

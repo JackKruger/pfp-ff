@@ -6,7 +6,7 @@ const manifest = {
   version: "0.0.0",
   engine: "web",
   entry: "/games/raskulls/index.html",
-  players: { min: 2, max: 4 },
+  players: { min: 1, max: 4 },
   sdk: "^1.0.0",
   tags: ["racing", "arena"],
   thumbnail: "/thumbnails/raskulls.png",

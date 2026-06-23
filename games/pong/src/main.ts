@@ -65,11 +65,12 @@ function loop(now: number): void {
   last = now;
 
   if (!paused) {
-    const [p1Pad, p2Pad] = [ctxLaunch.players[0].gamepadIndex, ctxLaunch.players[1].gamepadIndex];
+    const p1Pad = ctxLaunch.players[0].gamepadIndex;
+    const p2Pad = ctxLaunch.players[1]?.gamepadIndex ?? -1;
     // Prefer shell-forwarded frames; fall back to direct gamepad/keyboard
     // polling when running standalone (no shell sending frames).
     const frame = forwarded.sample() ?? input.sample(p1Pad, p2Pad);
-    if (frame.p1.start || frame.p2.start) audio.unlock();
+    if (frame.p1.start || frame.p2.start || frame.p1.serve || frame.p2.serve) audio.unlock();
 
     const standings = advance(state, dt, frame.p1, frame.p2);
 
