@@ -96,6 +96,12 @@ export class PairingLobby {
     return this.slots.length > 0;
   }
 
+  /** Pre-populate slots from a previous session (e.g. persisted store state). */
+  initSlots(slots: PairingSlot[]): void {
+    this.slots = slots.slice(0, this.maxPlayers).map((s) => ({ ...s }));
+    if (this.slots.length > 0) this.emitChange();
+  }
+
   reset(): void {
     this.slots = [];
     this.emitChange();
