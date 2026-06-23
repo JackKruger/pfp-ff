@@ -1,0 +1,25 @@
+{
+  "name": "@pfp/stick-smash",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5178",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4178",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.14.0",
+    "@pfp/controls": "workspace:*",
+    "@pfp/sdk": "workspace:*",
+    "peerjs": "^1.5.4",
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}

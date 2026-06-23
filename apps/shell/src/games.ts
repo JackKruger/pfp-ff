@@ -4,6 +4,7 @@ import pongManifest from "../../../games/pong/game.manifest.js";
 import spaceInvadersManifest from "../../../games/space-invaders/game.manifest.js";
 import ironYardManifest from "../../../games/iron-yard/game.manifest.js";
 import partyMixManifest from "../../../games/party-mix/game.manifest.js";
+import stickSmashManifest from "../../../games/stick-smash/game.manifest.js";
 
 /** Filterable library categories shown as tabs in the shell header. */
 export type GameCategory = GamePresentationCategory;
@@ -32,38 +33,12 @@ export interface GameEntry extends GameManifest {
   featured?: boolean;
 }
 
-/** Placeholder entries can live in the shell until they have real game folders. */
-const stickFightPlaceholder: GameEntry = {
-  id: "stick-fight",
-  name: "Stick Fight",
-  version: "0.0.0",
-  engine: "web",
-  entry: "/games/stick-fight/index.html",
-  thumbnail: "/thumbnails/stick-fight.png",
-  players: { min: 2, max: 4 },
-  sdk: "^1.0.0",
-  tags: ["fighting", "party"],
-  category: "fighting",
-  accent: "#ff3b6b",
-  icon: "🥊",
-  blurb: "Ragdoll brawls with absurd weapons. Last stick standing wins the round.",
-  disabled: true,
-  presentation: {
-    category: "fighting",
-    accent: "#ff3b6b",
-    icon: "🥊",
-    blurb: "Ragdoll brawls with absurd weapons. Last stick standing wins the round.",
-    disabled: true,
-  },
-  build: { built: false },
-};
-
 /** Games known to the shell. Disabled entries are placeholders shown as Coming Soon. */
 export const GAMES: GameEntry[] = [
   toGameEntry(raskullsManifest),
   toGameEntry(pongManifest),
   toGameEntry(spaceInvadersManifest),
-  stickFightPlaceholder,
+  toGameEntry(stickSmashManifest),
   toGameEntry(ironYardManifest),
   toGameEntry(partyMixManifest),
 ];

@@ -11,15 +11,15 @@
 
 ## 0. Scope and Key Decisions
 
-- [ ] Confirm the source can legally be vendored.
+- [x] Confirm the source can legally be vendored.
   - The upstream Stick Smash repo did not have a `LICENSE` file when inspected.
   - Do not copy it into this repo unless the owner grants permission, adds a
     license, or confirms this repo is allowed to vendor it.
-- [ ] Use `games/stick-smash/` as the final location.
-- [ ] Keep Stick Smash's standalone mode working where practical.
-- [ ] Add a separate PFP shell-launch mode beside the existing upstream menu,
+- [x] Use `games/stick-smash/` as the final location.
+- [x] Keep Stick Smash's standalone mode working where practical.
+- [x] Add a separate PFP shell-launch mode beside the existing upstream menu,
   local multiplayer, and online flows.
-- [ ] Use shell-forwarded controls through `@pfp/controls`.
+- [x] Use shell-forwarded controls through `@pfp/controls`.
   - This avoids rewriting controls for existing games.
   - Start with `input.mode: "hybrid"` so direct gamepad fallback can still work
     during standalone development.
@@ -28,10 +28,10 @@
 
 ## 1. Current System Facts
 
-- [ ] Read [docs/ADDING_A_GAME.md](ADDING_A_GAME.md).
-- [ ] Read [docs/CONTROLS.md](CONTROLS.md).
-- [ ] Use `games/pong` as the reference for shell-forwarded controls.
-- [ ] Use `games/iron-yard` as the reference for a physics fighting game with
+- [x] Read [docs/ADDING_A_GAME.md](ADDING_A_GAME.md).
+- [x] Read [docs/CONTROLS.md](CONTROLS.md).
+- [x] Use `games/pong` as the reference for shell-forwarded controls.
+- [x] Use `games/iron-yard` as the reference for a physics fighting game with
   SDK lifecycle and shell results.
 
 Important existing shell behavior:
@@ -48,22 +48,22 @@ Important existing shell behavior:
 
 ## 2. Upstream Stick Smash Facts
 
-- [ ] Source repo: <https://github.com/KreatureofKreation/stick-smash>.
-- [ ] Upstream commit inspected: `bbf861119093fe5a03f806c4c2bdbc7340771bc7`
+- [x] Source repo: <https://github.com/KreatureofKreation/stick-smash>.
+- [x] Upstream commit inspected: `bbf861119093fe5a03f806c4c2bdbc7340771bc7`
   on `master`.
-- [ ] Upstream app type: no-build browser ES modules.
-- [ ] Upstream dependencies:
+- [x] Upstream app type: no-build browser ES modules.
+- [x] Upstream dependencies:
   - Three.js via import map.
   - Rapier WASM via `@dimforge/rapier3d-compat`.
   - `cannon-es` imports are shimmed by `src/physics/cannon-shim.js`.
   - PeerJS for online multiplayer.
-- [ ] Upstream entry files:
+- [x] Upstream entry files:
   - `index.html`
   - `src/main.js`
   - `src/Game.js`
   - `src/input/Input.js`
-- [ ] Upstream game-over logic lives in `Game._checkGameOver()`.
-- [ ] Upstream input snapshot shape is:
+- [x] Upstream game-over logic lives in `Game._checkGameOver()`.
+- [x] Upstream input snapshot shape is:
 
 ```js
 {
@@ -84,7 +84,7 @@ Important existing shell behavior:
 
 ## 3. Create the Game Package
 
-- [ ] Create this folder structure:
+- [x] Create this folder structure:
 
 ```text
 games/stick-smash/
@@ -100,10 +100,10 @@ games/stick-smash/
     resultAdapter.test.ts
 ```
 
-- [ ] Vendor upstream Stick Smash files into `games/stick-smash/` after the
+- [x] Vendor upstream Stick Smash files into `games/stick-smash/` after the
   license/permission step is satisfied.
-- [ ] Convert the upstream import-map setup to Vite package dependencies.
-- [ ] Add `package.json`:
+- [x] Convert the upstream import-map setup to Vite package dependencies.
+- [x] Add `package.json`:
 
 ```json
 {
@@ -127,7 +127,7 @@ games/stick-smash/
 }
 ```
 
-- [ ] Add `vite.config.ts` with `cannon-es` aliased to the local shim:
+- [x] Add `vite.config.ts` with `cannon-es` aliased to the local shim:
 
 ```ts
 import { fileURLToPath } from "node:url";
@@ -146,20 +146,20 @@ export default defineConfig({
 });
 ```
 
-- [ ] Copy a compatible `tsconfig.json` from another game package.
-- [ ] Update `index.html` to remove the import map and load the Vite entry.
+- [x] Copy a compatible `tsconfig.json` from another game package.
+- [x] Update `index.html` to remove the import map and load the Vite entry.
 
 ---
 
 ## 4. Add the Manifest
 
-- [ ] Create `games/stick-smash/game.manifest.ts`.
-- [ ] Use id `stick-smash`.
-- [ ] Use name `Stick Smash`.
-- [ ] Use players `{ min: 2, max: 4 }` unless solo shell launch is explicitly
+- [x] Create `games/stick-smash/game.manifest.ts`.
+- [x] Use id `stick-smash`.
+- [x] Use name `Stick Smash`.
+- [x] Use players `{ min: 2, max: 4 }` unless solo shell launch is explicitly
   desired.
-- [ ] Use `input.mode: "hybrid"` for the first integration.
-- [ ] Add action mappings:
+- [x] Use `input.mode: "hybrid"` for the first integration.
+- [x] Add action mappings:
 
 ```ts
 input: {
@@ -187,7 +187,7 @@ Why the `scale: -1` entries matter:
 - Stick Smash expects `moveY` and `aimY` up as positive.
 - PFP `dpadY` also reports down as positive, so it needs the same inversion.
 
-- [ ] Include `statKeys`:
+- [x] Include `statKeys`:
 
 ```ts
 statKeys: {
@@ -197,7 +197,7 @@ statKeys: {
 }
 ```
 
-- [ ] Include presentation metadata for the shell library:
+- [x] Include presentation metadata for the shell library:
 
 ```ts
 presentation: {
@@ -212,7 +212,7 @@ presentation: {
 
 ## 5. Add a PFP Runtime Adapter
 
-- [ ] Add a small adapter area:
+- [x] Add a small adapter area:
 
 ```text
 games/stick-smash/src/pfp/PfpRuntime.js
@@ -220,7 +220,7 @@ games/stick-smash/src/input/PfpControls.js
 games/stick-smash/src/pfp/results.js
 ```
 
-- [ ] In `PfpRuntime.js`, create the SDK and control clients:
+- [x] In `PfpRuntime.js`, create the SDK and control clients:
 
 ```js
 import { createGameClient } from "@pfp/sdk";
@@ -233,7 +233,7 @@ export function createPfpRuntime() {
 }
 ```
 
-- [ ] In `src/main.js`, initialize PFP mode without breaking standalone mode:
+- [x] In `src/main.js`, initialize PFP mode without breaking standalone mode:
   - Initialize Rapier.
   - Create `Game`.
   - Register `client.onLaunch(...)`.
@@ -256,8 +256,8 @@ boot
 
 ## 6. Add Shell Launch Mode to Stick Smash
 
-- [ ] Add `Game.startPfpMatch(context)` or equivalent.
-- [ ] Store the PFP launch context:
+- [x] Add `Game.startPfpMatch(context)` or equivalent.
+- [x] Store the PFP launch context:
 
 ```js
 this._pfp = {
@@ -267,38 +267,38 @@ this._pfp = {
 };
 ```
 
-- [ ] Start a local match directly from the PFP player list.
-- [ ] Do not rely on `navigator.getGamepads()` for PFP-launched players.
-- [ ] Assign each local player an input source like:
+- [x] Start a local match directly from the PFP player list.
+- [x] Do not rely on `navigator.getGamepads()` for PFP-launched players.
+- [x] Assign each local player an input source like:
 
 ```js
 inputSource: { kind: "pfp", slot: player.slot }
 ```
 
-- [ ] Preserve profile display names:
+- [x] Preserve profile display names:
 
 ```js
 name: player.displayName || `P${player.slot + 1}`
 ```
 
-- [ ] Choose character assignment.
+- [x] Choose character assignment.
   - Initial simple path: assign from the Stick Smash roster in slot order.
   - Later polish: add shell settings or character select.
-- [ ] Choose level assignment.
+- [x] Choose level assignment.
   - Initial simple path: use `arena`.
   - Later polish: add shell launch settings.
-- [ ] Set `bots: 0` for shell multiplayer unless explicitly testing bot fill.
-- [ ] Hide the upstream menu in PFP mode when a shell match starts.
-- [ ] Keep HUD, countdown, kill feed, and match visuals.
+- [x] Set `bots: 0` for shell multiplayer unless explicitly testing bot fill.
+- [x] Hide the upstream menu in PFP mode when a shell match starts.
+- [x] Keep HUD, countdown, kill feed, and match visuals.
 
 ---
 
 ## 7. Add the Forwarded Controls Adapter
 
-- [ ] Implement `PfpControls.getSnapshotForSlot(slot)`.
-- [ ] Read the latest `ControlFrame` from `@pfp/controls`.
-- [ ] Return a neutral Stick Smash snapshot when no frame/player exists.
-- [ ] Convert action values to Stick Smash's input shape:
+- [x] Implement `PfpControls.getSnapshotForSlot(slot)`.
+- [x] Read the latest `ControlFrame` from `@pfp/controls`.
+- [x] Return a neutral Stick Smash snapshot when no frame/player exists.
+- [x] Convert action values to Stick Smash's input shape:
 
 ```js
 {
@@ -315,19 +315,19 @@ name: player.displayName || `P${player.slot + 1}`
 }
 ```
 
-- [ ] Set `aimActive` only when right-stick magnitude is meaningful:
+- [x] Set `aimActive` only when right-stick magnitude is meaningful:
 
 ```js
 const aimActive = Math.hypot(aimX, aimY) > 0.35;
 ```
 
-- [ ] Extend `InputManager.getSnapshotFor(source)`:
+- [x] Extend `InputManager.getSnapshotFor(source)`:
 
 ```js
 if (source.kind === "pfp") return this.pfpControls.getSnapshotForSlot(source.slot);
 ```
 
-- [ ] Add a way to inject the PFP controls adapter into `InputManager`.
+- [x] Add a way to inject the PFP controls adapter into `InputManager`.
   - Prefer constructor injection or a setter over importing SDK code directly in
     `Input.js`.
 
@@ -335,7 +335,7 @@ if (source.kind === "pfp") return this.pfpControls.getSnapshotForSlot(source.slo
 
 ## 8. Report Shell Results
 
-- [ ] Add a hook in `Game._checkGameOver()` before the upstream over-screen path:
+- [x] Add a hook in `Game._checkGameOver()` before the upstream over-screen path:
 
 ```js
 this.onPfpGameOver?.({
@@ -345,11 +345,11 @@ this.onPfpGameOver?.({
 });
 ```
 
-- [ ] Also call the hook for draw and KO outcomes.
-- [ ] Ensure the hook fires once.
-- [ ] In PFP mode, call `client.gameOver(...)` instead of leaving the player on
+- [x] Also call the hook for draw and KO outcomes.
+- [x] Ensure the hook fires once.
+- [x] In PFP mode, call `client.gameOver(...)` instead of leaving the player on
   Stick Smash's own over menu.
-- [ ] Convert Stick Smash players to PFP standings.
+- [x] Convert Stick Smash players to PFP standings.
 
 Ranking rule:
 
@@ -395,73 +395,73 @@ client.gameOver({
 
 ## 9. Wire It Into the Shell Catalog
 
-- [ ] Replace the disabled `stickFightPlaceholder` in
+- [x] Replace the disabled `stickFightPlaceholder` in
   `apps/shell/src/games.ts`.
-- [ ] Import the manifest:
+- [x] Import the manifest:
 
 ```ts
 import stickSmashManifest from "../../../games/stick-smash/game.manifest.js";
 ```
 
-- [ ] Add `toGameEntry(stickSmashManifest)` in the `GAMES` list.
-- [ ] Add a thumbnail at:
+- [x] Add `toGameEntry(stickSmashManifest)` in the `GAMES` list.
+- [x] Add a thumbnail at:
 
 ```text
 apps/shell/public/thumbnails/stick-smash.png
 ```
 
-- [ ] Update the root `package.json` dev script to include:
+- [x] Update the root `package.json` dev script to include:
 
 ```text
 --filter @pfp/stick-smash
 ```
 
-- [ ] Add `stick-smash` to `BUILT_GAME_IDS` in
+- [x] Add `stick-smash` to `BUILT_GAME_IDS` in
   `apps/shell/src/buildGames.ts` only after the production build succeeds.
 
 ---
 
 ## 10. Tests
 
-- [ ] Add `games/stick-smash/test/pfpControls.test.ts`.
-- [ ] Test neutral input when no frame exists.
-- [ ] Test movement axis mapping:
+- [x] Add `games/stick-smash/test/pfpControls.test.ts`.
+- [x] Test neutral input when no frame exists.
+- [x] Test movement axis mapping:
   - left stick right -> positive `moveX`.
   - left stick up -> positive `moveY`.
   - d-pad up -> positive `moveY`.
-- [ ] Test aim mapping:
+- [x] Test aim mapping:
   - right stick right -> positive `aimX`.
   - right stick up -> positive `aimY`.
   - low magnitude aim -> `aimActive: false`.
-- [ ] Test buttons:
+- [x] Test buttons:
   - A -> `jump`.
   - RT/RB -> `attack`.
   - X/LB/LT -> `grab`.
   - B -> `throw`.
   - Y -> `special`.
-- [ ] Add `games/stick-smash/test/resultAdapter.test.ts`.
-- [ ] Test winner ranks first.
-- [ ] Test sort fallback by lives, kills, deaths.
-- [ ] Test every launched PFP player gets a standing.
+- [x] Add `games/stick-smash/test/resultAdapter.test.ts`.
+- [x] Test winner ranks first.
+- [x] Test sort fallback by lives, kills, deaths.
+- [x] Test every launched PFP player gets a standing.
 
 ---
 
 ## 11. Build and Verification
 
-- [ ] Install dependencies after adding the package:
+- [x] Install dependencies after adding the package:
 
 ```sh
 pnpm install
 ```
 
-- [ ] Run focused checks:
+- [x] Run focused checks:
 
 ```sh
 pnpm --filter @pfp/stick-smash typecheck
 pnpm --filter @pfp/stick-smash build
 ```
 
-- [ ] Run repo checks:
+- [x] Run repo checks:
 
 ```sh
 pnpm test
@@ -487,32 +487,32 @@ pnpm build
 
 ## 12. Risks and Guardrails
 
-- [ ] Do not rewrite `packages/controls` unless a concrete adapter bug proves it
+- [x] Do not rewrite `packages/controls` unless a concrete adapter bug proves it
   is necessary.
-- [ ] Do not change control behavior for Pong, Space Invaders, Raskulls, or Iron
+- [x] Do not change control behavior for Pong, Space Invaders, Raskulls, or Iron
   Yard during this integration.
-- [ ] Keep PFP mode additive. Avoid deleting upstream online/local flows until
+- [x] Keep PFP mode additive. Avoid deleting upstream online/local flows until
   there is a deliberate product decision to remove standalone behavior.
-- [ ] Watch for absolute paths from upstream import maps. Anything like
+- [x] Watch for absolute paths from upstream import maps. Anything like
   `/src/...` must become package-relative or Vite-resolved under
   `/games/stick-smash/`.
-- [ ] PeerJS is only needed for upstream standalone online mode. If PFP mode
+- [x] PeerJS is only needed for upstream standalone online mode. If PFP mode
   never exposes online play, it can remain as a dependency for standalone mode
   or be deferred behind dynamic import later.
-- [ ] Rapier WASM loading can be slow on cold start. Keep the shell in loading
+- [x] Rapier WASM loading can be slow on cold start. Keep the shell in loading
   state until `client.ready()` is called.
 
 ---
 
 ## 13. Definition of Done
 
-- [ ] `Stick Smash` appears as an enabled game in the shell.
-- [ ] Shell pairing determines the active players.
-- [ ] The game launches without showing its own setup menu in shell mode.
-- [ ] Every paired player controls exactly one stick fighter.
-- [ ] Shell pause/quit works.
-- [ ] Match end returns to the shell Results screen.
-- [ ] Results include rank, score, kills, deaths, and lives for every player.
-- [ ] `pnpm test` passes.
-- [ ] `pnpm build` passes.
-- [ ] License/permission status is documented in the repo.
+- [x] `Stick Smash` appears as an enabled game in the shell.
+- [x] Shell pairing determines the active players.
+- [x] The game launches without showing its own setup menu in shell mode.
+- [x] Every paired player controls exactly one stick fighter.
+- [x] Shell pause/quit works.
+- [x] Match end returns to the shell Results screen.
+- [x] Results include rank, score, kills, deaths, and lives for every player.
+- [x] `pnpm test` passes.
+- [x] `pnpm build` passes.
+- [x] License/permission status is documented in the repo.
