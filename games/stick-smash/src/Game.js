@@ -336,6 +336,22 @@ export class Game {
       }
       this.localPlayer = this.localPlayers[0] ?? null;
       this.character = this.localPlayer?.character ?? null;
+
+      // Single-player: fill with CPU opponents so a lone human has a real match.
+      // Bots aren't in context.players, so they're never reported in standings.
+      const PFP_MIN_FIGHTERS = 2;
+      const botsToAdd = Math.max(0, PFP_MIN_FIGHTERS - shellPlayers.length);
+      for (let i = 0; i < botsToAdd; i++) {
+        const pool = ROSTER.filter((candidate) => !used.has(candidate.id));
+        const pick = pool[Math.floor(Math.random() * pool.length)] || ROSTER[(i + 1) % ROSTER.length];
+        used.add(pick.id);
+        const bsm = this._spawnPlayer({
+          name: pick.name,
+          character: pick,
+          isBot: true,
+        });
+        bsm.botBrain = new Bot(bsm);
+      }
     } else if (!asClient) {
       // Local-MP is offline-only AND opt-in. PLAY SOLO never spawns extras
       // even with pads plugged in; only the LOCAL MULTIPLAYER menu sets the

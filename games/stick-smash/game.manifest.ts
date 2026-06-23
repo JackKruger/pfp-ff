@@ -7,7 +7,7 @@ const manifest = {
   engine: "web",
   entry: "/games/stick-smash/index.html",
   thumbnail: "/thumbnails/stick-smash.png",
-  players: { min: 2, max: 4 },
+  players: { min: 1, max: 4 },
   sdk: "^1.0.0",
   tags: ["fighting", "party"],
   statKeys: {

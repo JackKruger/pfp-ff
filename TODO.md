@@ -19,6 +19,7 @@
 ### Single-player support
 - [x] Raskulls should support 1 player — manifest min is 1; race mode fills bots; results advance on Jump.
 - [x] Pong should support 1 player — synthesizes a CPU opponent; starts on Fire.
+- [x] Stick Smash should support 1 player — manifest min is 1; fills a CPU opponent when a lone human launches.
 
 ### Global
 - [x] Remove keyboard navigation hints — pairing/game-overlay/error hints are now controller-only.
