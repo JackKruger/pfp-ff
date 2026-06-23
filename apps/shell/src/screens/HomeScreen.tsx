@@ -14,16 +14,17 @@ const SLOTS = [
 ] as const;
 
 export function HomeScreen() {
-  const { navigate, selectGame, pairedSlots, profiles, addSessionSlot, removeSessionSlot } =
+  const { navigate, selectGame, clearGame, pairedSlots, profiles, addSessionSlot, removeSessionSlot } =
     useShell();
   const ticker = useShellTicker();
   const [connectedIndices, setConnectedIndices] = useState<number[]>([]);
   const [showPlayers, setShowPlayers] = useState(false);
 
-  const pairedSlotsRef = useRef(pairedSlots);
+  // Ref so the tick closure can read current modal state without re-subscribing.
+  const showPlayersRef = useRef(showPlayers);
   useEffect(() => {
-    pairedSlotsRef.current = pairedSlots;
-  }, [pairedSlots]);
+    showPlayersRef.current = showPlayers;
+  }, [showPlayers]);
 
   useEffect(() => {
     return ticker.onTick(() => {
@@ -31,8 +32,29 @@ export function HomeScreen() {
       const connected = poller.connectedIndices();
       setConnectedIndices(connected);
 
-      const slots = pairedSlotsRef.current;
+      const connectedSet = new Set(connected);
+
+      // Read live store state so we always see post-mutation values within the same tick.
+      const { pairedSlots: slots } = useShell.getState();
       const joinedSet = new Set(slots.filter((s) => s.gamepadIndex >= 0).map((s) => s.gamepadIndex));
+
+      // If the Players modal is open, any B press closes it — don't process join/leave.
+      if (showPlayersRef.current) {
+        for (const idx of connected) {
+          if (poller.justPressed(idx, "b")) {
+            setShowPlayers(false);
+            return;
+          }
+        }
+        return;
+      }
+
+      // Auto-cleanup: remove joined slots whose controller has disconnected.
+      for (const slot of slots) {
+        if (slot.gamepadIndex >= 0 && !connectedSet.has(slot.gamepadIndex)) {
+          removeSessionSlot(slot.gamepadIndex);
+        }
+      }
 
       for (const idx of connected) {
         if (joinedSet.has(idx)) {
@@ -120,7 +142,7 @@ export function HomeScreen() {
       </main>
 
       <footer className="home-screen__footer">
-        <span className="hint">D-pad / stick to navigate · A to select · B to leave session</span>
+        <span className="hint">D-pad / stick · A select · A join (unjoined) · B leave (joined)</span>
       </footer>
 
       {/* Players modal */}
@@ -155,6 +177,7 @@ export function HomeScreen() {
                 id="players-manage"
                 onClick={() => {
                   setShowPlayers(false);
+                  clearGame();
                   navigate("pairing");
                 }}
                 variant="ghost"

@@ -42,6 +42,11 @@ function GlobalInput({ ticker }: { ticker: ShellTicker }) {
     };
   }, [focus, screen, navigate]);
 
+  // Reset axis snapshot whenever the screen changes to prevent phantom navigation on re-entry.
+  useEffect(() => {
+    axisRef.current = {};
+  }, [screen]);
+
   // D-pad / left-stick / A / B navigation; skip during pairing (lobby owns A/B) and in-game.
   // Only joined controllers drive the focus; falls back to all connected if none are joined.
   useEffect(() => {

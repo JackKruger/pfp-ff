@@ -19,6 +19,7 @@ interface ShellState {
 
   navigate(to: Screen): void;
   selectGame(game: GameManifest): void;
+  clearGame(): void;
   setPairedSlots(slots: PairingSlot[]): void;
   setResult(result: GameResult): void;
   addSessionSlot(gamepadIndex: number): void;
@@ -46,6 +47,10 @@ export const useShell = create<ShellState>((set, get) => ({
 
   selectGame(game) {
     set({ selectedGame: game });
+  },
+
+  clearGame() {
+    set({ selectedGame: null });
   },
 
   setPairedSlots(slots) {

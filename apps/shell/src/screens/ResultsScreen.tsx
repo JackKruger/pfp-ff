@@ -56,6 +56,10 @@ export function ResultsScreen() {
           Main Menu
         </Btn>
       </div>
+
+      <footer className="home-screen__footer">
+        <span className="hint">D-pad / stick to navigate · A to select · B for main menu</span>
+      </footer>
     </div>
   );
 }

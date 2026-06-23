@@ -48,11 +48,19 @@ export function GameScreen() {
   }, [phase]);
 
   // Controller: Start = toggle overlay; in overlay, up/down/A/B navigate.
+  // B/A also escape from the error state and the no-game fallback.
   useEffect(() => {
     return ticker.onTick(() => {
       const poller = ticker.poller;
       const p = phaseRef.current;
       for (const idx of poller.connectedIndices()) {
+        // Escape from error state or no-game fallback with any face button.
+        if (p === "error" || p === "loading") {
+          if (poller.justPressed(idx, "b") || poller.justPressed(idx, "a")) {
+            navigate("home");
+            return;
+          }
+        }
         if (p === "playing" && poller.justPressed(idx, "start")) {
           setPhase("overlay");
           setOverlayItem("resume");
@@ -77,7 +85,7 @@ export function GameScreen() {
     });
   }, [ticker, navigate]);
 
-  // Keyboard: Escape = toggle overlay; Enter = confirm selection.
+  // Keyboard: Escape = toggle overlay or navigate home; Enter = confirm selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const p = phaseRef.current;
@@ -87,6 +95,8 @@ export function GameScreen() {
           setOverlayItem("resume");
         } else if (p === "overlay") {
           setPhase("playing");
+        } else if (p === "error" || p === "loading") {
+          navigate("home");
         }
         return;
       }

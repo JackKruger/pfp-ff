@@ -175,7 +175,7 @@ export function PairingScreen() {
   }, [selectedGame?.players.max, ticker, setPairedSlots]);
 
   const minPlayers = selectedGame?.players.min ?? 1;
-  const canStart = pairedSlots.length >= 1;
+  const canStart = pairedSlots.length >= minPlayers;
   const slotCount = selectedGame?.players.max ?? 4;
   const isManageMode = selectedGame === null;
 
@@ -214,8 +214,16 @@ export function PairingScreen() {
       </div>
 
       <p className="pairing-screen__hint">
-        <kbd>Enter</kbd> / <kbd>A</kbd> join · <kbd>Esc</kbd> / <kbd>B</kbd> leave · <kbd>←</kbd>
-        <kbd>→</kbd> profile · <kbd>1</kbd>-<kbd>4</kbd> keyboard
+        {isManageMode ? (
+          <>
+            <kbd>A</kbd> join · <kbd>B</kbd> leave · <kbd>←</kbd><kbd>→</kbd> change profile
+          </>
+        ) : (
+          <>
+            <kbd>Enter</kbd> / <kbd>A</kbd> join · <kbd>Esc</kbd> / <kbd>B</kbd> leave · <kbd>←</kbd>
+            <kbd>→</kbd> profile · <kbd>1</kbd>-<kbd>4</kbd> keyboard
+          </>
+        )}
       </p>
 
       <div className="pairing-screen__actions">
@@ -229,8 +237,8 @@ export function PairingScreen() {
         )}
       </div>
 
-      {minPlayers > 1 && pairedSlots.length < minPlayers && (
-        <p className="pairing-screen__need">Best with {minPlayers}+ players</p>
+      {!isManageMode && minPlayers > 1 && pairedSlots.length < minPlayers && (
+        <p className="pairing-screen__need">Requires {minPlayers}+ players to start</p>
       )}
     </div>
   );

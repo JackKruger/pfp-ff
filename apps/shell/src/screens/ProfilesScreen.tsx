@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useFocusable } from "@pfp/ui";
+import { useEffect, useState } from "react";
+import { useFocusable, useFocusManager } from "@pfp/ui";
 import { Btn } from "../components/Btn.js";
 import { useShell } from "../store.js";
 import type { Profile } from "@pfp/data";
@@ -34,6 +34,19 @@ interface EditModalProps {
 function EditModal({ profile, onSave, onClose }: EditModalProps) {
   const [name, setName] = useState(profile?.name ?? "");
   const [color, setColor] = useState(profile?.color ?? PRESET_COLORS[0]);
+
+  // Capture-phase Escape listener fires before GlobalInput's bubble-phase listener,
+  // so stopPropagation here prevents GlobalInput from also navigating home.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handler, { capture: true });
+    return () => window.removeEventListener("keydown", handler, { capture: true });
+  }, [onClose]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -78,6 +91,14 @@ function EditModal({ profile, onSave, onClose }: EditModalProps) {
 export function ProfilesScreen() {
   const { navigate, profiles, createProfile, updateProfile, deleteProfile } = useShell();
   const [editing, setEditing] = useState<Profile | null | "new">(null);
+  const focus = useFocusManager();
+
+  // Override focus.onBack so B closes the modal instead of jumping to home when one is open.
+  useEffect(() => {
+    focus.onBack = editing !== null
+      ? () => setEditing(null)
+      : () => navigate("home");
+  }, [editing, focus, navigate]);
 
   async function handleSave(name: string, color: string) {
     if (editing === "new") {
