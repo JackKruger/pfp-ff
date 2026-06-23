@@ -516,3 +516,34 @@ pnpm build
 - [x] `pnpm test` passes.
 - [x] `pnpm build` passes.
 - [x] License/permission status is documented in the repo.
+
+---
+
+## 14. Upstream Sync Follow-Up
+
+- [ ] Confirm the vendored game still runs standalone through the PFP package:
+
+```sh
+pnpm --filter @pfp/stick-smash dev
+```
+
+- [ ] Decide whether to contribute integration hooks back to the original Stick
+  Smash repo.
+- [ ] Before opening an upstream PR, rename PFP-specific concepts to neutral
+  extension points where practical:
+  - `startPfpMatch(...)` -> external/shell launch hook.
+  - `{ kind: "pfp", slot }` -> generic external input source.
+  - `onPfpGameOver` -> generic match-over callback.
+- [ ] Keep upstream PR changes limited to reusable hooks:
+  - injectable input adapters.
+  - external match launch from an explicit player list.
+  - game-over callback before the upstream over-screen path.
+  - optional per-player metadata for result adapters.
+- [ ] Keep `@pfp/sdk`, `@pfp/controls`, manifest metadata, shell catalog wiring,
+  and PFP result conversion in this repo unless upstream explicitly wants an
+  optional PFP adapter package.
+- [ ] Document an upstream update workflow for this repo:
+  - track the upstream commit in `games/stick-smash/UPSTREAM.md`.
+  - merge or re-vendor upstream changes.
+  - reapply only the thin adapter layer.
+  - run Stick Smash focused checks plus `pnpm test` and `pnpm build`.
