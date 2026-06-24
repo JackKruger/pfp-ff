@@ -21,6 +21,16 @@ const manifest = {
     durationMs: { label: "Duration", scope: "match" },
   },
   input: { mode: "direct" },
+  settings: {
+    fields: [
+      {
+        id: "raceBots",
+        label: "Fill race with bots",
+        type: "boolean",
+        default: true,
+      },
+    ],
+  },
   presentation: {
     category: "racing",
     accent: "#f59e0b",
