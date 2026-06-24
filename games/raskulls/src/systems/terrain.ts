@@ -18,10 +18,12 @@ export type TileKind =
   | "dash"
   | "bomb"
   | "shield"
+  | "stunBolt"
+  | "burst"
   | "spikes"
   | "finish";
 
-export type PickupKind = "gem" | "boostie" | "bomb" | "shield";
+export type PickupKind = "gem" | "boostie" | "bomb" | "shield" | "stunBolt" | "burst";
 export type HazardKind = "spikes";
 
 export type TerrainCell =
@@ -92,7 +94,14 @@ export function isBreakableTile(kind: TileKind): boolean {
 }
 
 export function isPickupTile(kind: TileKind): kind is PickupKind {
-  return kind === "gem" || kind === "boostie" || kind === "bomb" || kind === "shield";
+  return (
+    kind === "gem" ||
+    kind === "boostie" ||
+    kind === "bomb" ||
+    kind === "shield" ||
+    kind === "stunBolt" ||
+    kind === "burst"
+  );
 }
 
 export class TerrainGrid {
@@ -391,6 +400,8 @@ function toCell(kindOrCell: TileKind | TerrainCell): TerrainCell {
     case "dash":
     case "bomb":
     case "shield":
+    case "stunBolt":
+    case "burst":
       return pickupToCell(kindOrCell === "dash" ? "boostie" : kindOrCell);
     case "spikes":
       return { kind: "hazard", hazard: "spikes" };

@@ -21,6 +21,11 @@ const PLAYER_HEIGHT = 34;
 const FRENZY_MAX_ENERGY = 100;
 const FRENZY_BOOSTIE_ENERGY = 35;
 const FRENZY_MIN_ACTIVATE = 30;
+const STUN_BOLT_RANGE = 320;
+const STUN_BOLT_LANE_HEIGHT = 92;
+const STUN_BOLT_STUN_MS = 700;
+const STUN_BOLT_FRENZY_DRAIN = 24;
+const BURST_RADIUS_TILES = 1;
 
 interface ModeTuning {
   runSpeed: number;
@@ -103,7 +108,7 @@ export interface PlayPlayer extends PlayerSlot {
   body: Phaser.GameObjects.Image;
   shieldView: Phaser.GameObjects.Ellipse;
   label: Phaser.GameObjects.Text;
-  powerText: Phaser.GameObjects.Text;
+  powerIcon: Phaser.GameObjects.Image;
 }
 
 export abstract class PlayScene extends Phaser.Scene {
@@ -243,17 +248,11 @@ export abstract class PlayScene extends Phaser.Scene {
       strokeThickness: 3,
     });
     label.setOrigin(0.5);
-    const powerText = this.add.text(0, 30, "", {
-      fontFamily: "Segoe UI, sans-serif",
-      fontSize: "11px",
-      fontStyle: "700",
-      color: "#fde68a",
-      stroke: "#111827",
-      strokeThickness: 3,
-    });
-    powerText.setOrigin(0.5);
+    const powerIcon = this.add.image(0, 31, TEXTURES.bomb);
+    powerIcon.setScale(0.72);
+    powerIcon.setVisible(false);
 
-    const view = this.add.container(start.x, start.y, [shieldView, body, label, powerText]);
+    const view = this.add.container(start.x, start.y, [shieldView, body, label, powerIcon]);
     view.setDepth(20);
 
     return {
@@ -291,7 +290,7 @@ export abstract class PlayScene extends Phaser.Scene {
       body,
       shieldView,
       label,
-      powerText,
+      powerIcon,
     };
   }
 
@@ -398,6 +397,12 @@ export abstract class PlayScene extends Phaser.Scene {
     } else if (player.powerup === "shield") {
       player.shieldUntil = time + 5_000;
       player.powerup = null;
+    } else if (player.powerup === "stunBolt") {
+      this.stunBolt(player, time);
+      player.powerup = null;
+    } else if (player.powerup === "burst") {
+      this.blockClearBurst(player);
+      player.powerup = null;
     }
   }
 
@@ -429,9 +434,48 @@ export abstract class PlayScene extends Phaser.Scene {
     const frontX = player.x + player.width / 2 + player.facing * TILE_SIZE;
     const frontY = player.y + player.height / 2;
     const center = this.grid.worldToTile(frontX, frontY);
+    this.destroyBlockGroupsInArea(
+      player,
+      center.tileX - 1,
+      center.tileY - 1,
+      center.tileX + 1,
+      center.tileY + 1,
+    );
+  }
+
+  private blockClearBurst(player: PlayPlayer): void {
+    const center = this.grid.worldToTile(player.x + player.width / 2, player.y + player.height / 2);
+    this.destroyBlockGroupsInArea(
+      player,
+      center.tileX - BURST_RADIUS_TILES,
+      center.tileY - BURST_RADIUS_TILES,
+      center.tileX + BURST_RADIUS_TILES,
+      center.tileY + BURST_RADIUS_TILES,
+    );
+
+    const { x, y } = this.grid.tileToWorldCenter(center.tileX, center.tileY);
+    const ring = this.add.circle(x, y, TILE_SIZE * 1.6);
+    ring.setStrokeStyle(4, 0xf97316, 0.7);
+    ring.setDepth(32);
+    this.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scale: 1.7,
+      duration: 180,
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  private destroyBlockGroupsInArea(
+    player: PlayPlayer,
+    minTileX: number,
+    minTileY: number,
+    maxTileX: number,
+    maxTileY: number,
+  ): void {
     const destroyedKeys = new Set<string>();
-    for (let y = center.tileY - 1; y <= center.tileY + 1; y++) {
-      for (let x = center.tileX - 1; x <= center.tileX + 1; x++) {
+    for (let y = minTileY; y <= maxTileY; y++) {
+      for (let x = minTileX; x <= maxTileX; x++) {
         for (const tile of this.grid.destroyConnectedBlockGroup(x, y)) {
           const key = `${tile.tileX},${tile.tileY}`;
           if (destroyedKeys.has(key)) continue;
@@ -443,6 +487,54 @@ export abstract class PlayScene extends Phaser.Scene {
       }
     }
     if (destroyedKeys.size > 0) this.settleBlocksAndResolveChains();
+  }
+
+  private stunBolt(player: PlayPlayer, time: number): void {
+    const origin = playerCenter(player);
+    const target = this.players
+      .filter((candidate) => {
+        if (candidate.slot === player.slot || !candidate.alive || candidate.finished) return false;
+        const center = playerCenter(candidate);
+        const forwardDistance = (center.x - origin.x) * player.facing;
+        return (
+          forwardDistance > 0 &&
+          forwardDistance <= STUN_BOLT_RANGE &&
+          Math.abs(center.y - origin.y) <= STUN_BOLT_LANE_HEIGHT
+        );
+      })
+      .sort(
+        (a, b) =>
+          (playerCenter(a).x - origin.x) * player.facing -
+          (playerCenter(b).x - origin.x) * player.facing,
+      )[0];
+
+    const end = target
+      ? playerCenter(target)
+      : { x: origin.x + player.facing * STUN_BOLT_RANGE, y: origin.y };
+    const beam = this.add.line(0, 0, origin.x, origin.y, end.x, end.y, 0xa78bfa, 0.9);
+    beam.setOrigin(0, 0);
+    beam.setLineWidth(5, 2);
+    beam.setDepth(34);
+    this.tweens.add({
+      targets: beam,
+      alpha: 0,
+      duration: 150,
+      onComplete: () => beam.destroy(),
+    });
+
+    if (!target) return;
+    if (time < target.shieldUntil) {
+      target.shieldView.setScale(1.18);
+      this.tweens.add({ targets: target.shieldView, scale: 1, duration: 130 });
+      return;
+    }
+
+    target.lastHitBy = player.slot;
+    target.stunnedUntil = Math.max(target.stunnedUntil, time + STUN_BOLT_STUN_MS);
+    target.vx = player.facing * 170;
+    target.vy = Math.min(target.vy, -95);
+    target.frenzyEnergy = Math.max(0, target.frenzyEnergy - STUN_BOLT_FRENZY_DRAIN);
+    if (target.frenzyEnergy <= 0) target.frenzyActive = false;
   }
 
   private movePlayer(player: PlayPlayer, dx: number, dy: number): void {
@@ -680,7 +772,12 @@ export abstract class PlayScene extends Phaser.Scene {
     player.body.setFlipX(player.facing < 0);
     player.body.setScale(player.frenzyActive ? 1.12 : 1);
     player.shieldView.setVisible(time < player.shieldUntil);
-    player.powerText.setText(player.powerup ? player.powerup.toUpperCase() : "");
+    if (player.powerup) {
+      player.powerIcon.setTexture(textureForPowerup(player.powerup));
+      player.powerIcon.setVisible(true);
+    } else {
+      player.powerIcon.setVisible(false);
+    }
     player.label.setText(player.lives > 0 ? player.displayName : `${player.displayName} OUT`);
   }
 
@@ -798,6 +895,10 @@ function textureForTile(kind: TileKind): string | null {
       return TEXTURES.bomb;
     case "shield":
       return TEXTURES.shield;
+    case "stunBolt":
+      return TEXTURES.stunBolt;
+    case "burst":
+      return TEXTURES.burst;
     case "spikes":
       return TEXTURES.spikes;
     case "finish":
@@ -807,12 +908,32 @@ function textureForTile(kind: TileKind): string | null {
   }
 }
 
+function textureForPowerup(kind: Exclude<PickupKind, "gem" | "boostie">): string {
+  switch (kind) {
+    case "bomb":
+      return TEXTURES.bomb;
+    case "shield":
+      return TEXTURES.shield;
+    case "stunBolt":
+      return TEXTURES.stunBolt;
+    case "burst":
+      return TEXTURES.burst;
+  }
+}
+
 function playerRect(player: PlayPlayer): Rect {
   return {
     x: player.x,
     y: player.y,
     width: player.width,
     height: player.height,
+  };
+}
+
+function playerCenter(player: PlayPlayer): Vec2 {
+  return {
+    x: player.x + player.width / 2,
+    y: player.y + player.height / 2,
   };
 }
 

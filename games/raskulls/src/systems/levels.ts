@@ -89,8 +89,10 @@ function createDigRushRaceLevel(): RaceLevel {
   grid.set(18, 17, "boostie");
   grid.set(27, 11, "gem");
   grid.set(36, 17, "bomb");
+  grid.set(41, 17, "stunBolt");
   grid.set(47, 14, "gem");
   grid.set(57, 17, "shield");
+  grid.set(61, 14, "burst");
   grid.set(66, 14, "gem");
 
   const finishTileX = 71;
@@ -134,7 +136,9 @@ function createCliffClimbRaceLevel(): RaceLevel {
   grid.set(9, 18, "boostie");
   grid.set(18, 15, "gem");
   grid.set(28, 12, "boostie");
+  grid.set(33, 12, "burst");
   grid.set(37, 9, "shield");
+  grid.set(41, 9, "stunBolt");
   grid.set(44, 9, "gem");
 
   const finishTileX = 48;
@@ -183,7 +187,9 @@ function createGrayGambitRaceLevel(): RaceLevel {
   grid.set(22, 17, "bomb");
   grid.set(35, 12, "gem");
   grid.set(48, 14, "boostie");
+  grid.set(52, 14, "stunBolt");
   grid.set(56, 14, "shield");
+  grid.set(62, 16, "burst");
   grid.set(64, 17, "gem");
 
   const finishTileX = 66;
@@ -226,6 +232,8 @@ export function createArenaLevel(): ArenaLevel {
   grid.set(16, 9, "bomb");
   grid.set(19, 9, "dash");
   grid.set(17, 11, "shield");
+  grid.set(21, 11, "stunBolt");
+  grid.set(14, 11, "burst");
 
   return {
     grid,

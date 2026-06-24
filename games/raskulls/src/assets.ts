@@ -15,6 +15,8 @@ export const TEXTURES = {
   dash: "raskulls-dash",
   bomb: "raskulls-bomb",
   shield: "raskulls-shield",
+  stunBolt: "raskulls-stun-bolt",
+  burst: "raskulls-burst",
   spikes: "raskulls-spikes",
   finish: "raskulls-finish",
 } as const;
@@ -34,6 +36,8 @@ export function createCodeTextures(scene: Phaser.Scene): void {
   createDash(scene);
   createBomb(scene);
   createShield(scene);
+  createStunBolt(scene);
+  createBurst(scene);
   createSpikes(scene);
   createFinish(scene);
 }
@@ -173,6 +177,50 @@ function createShield(scene: Phaser.Scene): void {
     true,
   );
   g.generateTexture(TEXTURES.shield, 32, 32);
+  g.destroy();
+}
+
+function createStunBolt(scene: Phaser.Scene): void {
+  if (scene.textures.exists(TEXTURES.stunBolt)) return;
+  const g = scene.add.graphics();
+  g.fillStyle(0x312e81, 1);
+  g.fillCircle(16, 16, 13);
+  g.fillStyle(0xa78bfa, 1);
+  g.fillPoints(
+    [
+      new Phaser.Math.Vector2(18, 3),
+      new Phaser.Math.Vector2(7, 17),
+      new Phaser.Math.Vector2(15, 17),
+      new Phaser.Math.Vector2(12, 29),
+      new Phaser.Math.Vector2(25, 12),
+      new Phaser.Math.Vector2(17, 12),
+    ],
+    true,
+  );
+  g.lineStyle(2, 0xf5f3ff, 0.82);
+  g.strokeCircle(16, 16, 12);
+  g.generateTexture(TEXTURES.stunBolt, 32, 32);
+  g.destroy();
+}
+
+function createBurst(scene: Phaser.Scene): void {
+  if (scene.textures.exists(TEXTURES.burst)) return;
+  const g = scene.add.graphics();
+  g.fillStyle(0xf97316, 1);
+  g.fillCircle(16, 16, 12);
+  g.fillStyle(0xfef3c7, 1);
+  for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+    const inner = new Phaser.Math.Vector2(16 + Math.cos(angle) * 5, 16 + Math.sin(angle) * 5);
+    const outer = new Phaser.Math.Vector2(16 + Math.cos(angle) * 14, 16 + Math.sin(angle) * 14);
+    g.lineStyle(3, 0xfef3c7, 1);
+    g.beginPath();
+    g.moveTo(inner.x, inner.y);
+    g.lineTo(outer.x, outer.y);
+    g.strokePath();
+  }
+  g.fillStyle(0x7c2d12, 1);
+  g.fillCircle(16, 16, 5);
+  g.generateTexture(TEXTURES.burst, 32, 32);
   g.destroy();
 }
 

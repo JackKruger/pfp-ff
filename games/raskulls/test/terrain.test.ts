@@ -57,6 +57,7 @@ describe("raskulls terrain", () => {
     expect(isSolidTile("steel")).toBe(true);
     expect(isBreakableTile("greenBlock")).toBe(true);
     expect(isBreakableTile("steel")).toBe(false);
+    expect(isBreakableTile("stunBolt")).toBe(false);
 
     const grid = new TerrainGrid(5, 5);
     grid.set(1, 1, "greenBlock");
@@ -90,6 +91,18 @@ describe("raskulls terrain", () => {
 
     expect(grid.get(1, 1)).toBe("boostie");
     expect(grid.getCell(1, 1)).toEqual({ kind: "pickup", pickup: "boostie" });
+  });
+
+  it("supports stun bolt and burst pickups", () => {
+    const grid = new TerrainGrid(4, 4);
+    grid.set(1, 1, "stunBolt");
+    grid.set(2, 1, "burst");
+
+    expect(grid.getCell(1, 1)).toEqual({ kind: "pickup", pickup: "stunBolt" });
+    expect(grid.getCell(2, 1)).toEqual({ kind: "pickup", pickup: "burst" });
+    expect(
+      grid.collectPickups({ x: 32, y: 32, width: 64, height: 32 }).map((item) => item.kind),
+    ).toEqual(["stunBolt", "burst"]);
   });
 
   it("drops a single unsupported block into empty cells", () => {

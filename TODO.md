@@ -3,25 +3,31 @@
 ## Playtest feedback (2026-06-23)
 
 ### Home page
+
 - [x] Featured banner is slightly too tall — reduce height.
 - [x] On smaller screens the "Play Now" button falls through the bottom of the banner — fix responsive layout.
 
 ### "Who's Playing" / pairing screen
+
 - [x] Player cards are a little too small — increase card size.
 - [x] No way to press the "Start Game" button with a controller — any joined controller now presses Start to launch.
 
 ### Iron Yard
+
 - [x] Only movement (and maybe sprint) works — attacks now swing through a real arc (so they connect) and the right stick turns the player. (Jump/block/sprint already read the same gamepad path.)
 
 ### Space Invaders
+
 - [x] Says "Press Start to play", but Start opens the pause menu — now starts on Fire.
 
 ### Single-player support
+
 - [x] Raskulls should support 1 player — manifest min is 1; race mode fills bots; results advance on Jump.
 - [x] Pong should support 1 player — synthesizes a CPU opponent; starts on Fire.
 - [x] Stick Smash should support 1 player — manifest min is 1; fills a CPU opponent when a lone human launches.
 
 ### Global
+
 - [x] Remove keyboard navigation hints — pairing/game-overlay/error hints are now controller-only.
 
 ---
@@ -195,7 +201,7 @@ Goal: move `games/raskulls` from a lightweight Raskulls-inspired prototype towar
 
 ### Phase 4 — Powerups and player disruption
 
-- [ ] Expand powerups beyond `bomb` and `shield`.
+- [x] Expand powerups beyond `bomb` and `shield`.
   - Files: `games/raskulls/src/systems/terrain.ts`, `games/raskulls/src/scenes/PlayScene.ts`, `games/raskulls/src/assets.ts`
   - Keep `bomb` and `shield`, but tune them for race disruption.
   - Add at least two more race-friendly offensive/defensive items: stun projectile, swap/slow trap, block-clear burst, or temporary invulnerability.

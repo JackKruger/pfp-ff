@@ -47,4 +47,16 @@ describe("raskulls level catalog", () => {
     expect(grayGambit.grid.get(29, 15)).toBe("grayBlock");
     expect(grayGambit.grid.get(50, 15)).toBe("grayBlock");
   });
+
+  it("places race-friendly disruption and block-clear powerups", () => {
+    const pickups = new Set<string>();
+
+    for (const definition of raceLevelDefinitions()) {
+      createRaceLevel(definition.id).grid.forEachTile((_tileX, _tileY, kind) => {
+        if (kind === "stunBolt" || kind === "burst") pickups.add(kind);
+      });
+    }
+
+    expect(pickups).toEqual(new Set(["stunBolt", "burst"]));
+  });
 });
