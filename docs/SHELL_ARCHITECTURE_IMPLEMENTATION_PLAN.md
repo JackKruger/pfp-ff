@@ -43,6 +43,8 @@ Completed:
 - AI-generated game workflow prep: `docs/GAME_SPEC_TEMPLATE.md` exists so new
   games can start from an explicit concept, controls, scoring, result, and test
   plan before code generation.
+- Starter template prep: `games/_template-sdk` exists for custom SDK-only games
+  that need raw lifecycle wiring and direct input.
 
 - Keyboard fallback in `@pfp/controls`: `KeyboardControlSource` feeds the
   control frame for any slot whose gamepad is disconnected (gamepad always
@@ -52,7 +54,7 @@ Completed:
 Not yet done:
 
 - `@pfp/game-kit`.
-- Starter templates and `scripts/create-game.mjs`.
+- Game-kit starter template and `scripts/create-game.mjs`.
 
 ---
 

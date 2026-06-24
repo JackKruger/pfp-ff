@@ -27,6 +27,12 @@ The planned game-kit path is documented in
 
 Create a folder under `games/`:
 
+For SDK-only custom games, start by copying `games/_template-sdk/`. It shows
+raw SDK lifecycle handlers, direct keyboard/gamepad input, pause/resume,
+terminate cleanup, and `GameResult` reporting. Replace the template tokens:
+`__GAME_ID__`, `__GAME_NAME__`, `__PACKAGE_NAME__`, `__DEV_PORT__`, and
+`__PREVIEW_PORT__`.
+
 ```
 games/
   your-game/

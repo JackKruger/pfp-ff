@@ -2,3 +2,4 @@ packages:
   - "packages/*"
   - "apps/*"
   - "games/*"
+  - "!games/_template-*"

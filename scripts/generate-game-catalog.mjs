@@ -2,50 +2,54 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, "..");
-const gamesDir = path.join(repoRoot, "games");
-const outputPath = path.join(repoRoot, "apps", "shell", "src", "games.generated.ts");
-const checkOnly = process.argv.includes("--check");
+if (isMainModule()) {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const repoRoot = path.resolve(__dirname, "..");
+  const gamesDir = path.join(repoRoot, "games");
+  const outputPath = path.join(repoRoot, "apps", "shell", "src", "games.generated.ts");
+  const checkOnly = process.argv.includes("--check");
 
-const entries = await readdir(gamesDir, { withFileTypes: true });
-const gameDirs = entries
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name)
-  .filter((name) => !name.startsWith("_"))
-  .sort((a, b) => a.localeCompare(b));
+  const entries = await readdir(gamesDir, { withFileTypes: true });
+  const gameDirs = catalogGameDirs(
+    entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name),
+  );
 
-const manifests = [];
-for (const dir of gameDirs) {
-  const manifestPath = path.join(gamesDir, dir, "game.manifest.ts");
-  try {
-    await readFile(manifestPath, "utf8");
-    manifests.push({ dir, identifier: identifierForGameDir(dir) });
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
+  const manifests = [];
+  for (const dir of gameDirs) {
+    const manifestPath = path.join(gamesDir, dir, "game.manifest.ts");
+    try {
+      await readFile(manifestPath, "utf8");
+      manifests.push({ dir, identifier: identifierForGameDir(dir) });
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+
+  const generated = renderCatalog(manifests);
+
+  if (checkOnly) {
+    let current = "";
+    try {
+      current = await readFile(outputPath, "utf8");
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+
+    if (current !== generated) {
+      console.error("apps/shell/src/games.generated.ts is out of date.");
+      console.error("Run: pnpm generate:game-catalog");
+      process.exit(1);
+    }
+  } else {
+    await writeFile(outputPath, generated);
   }
 }
 
-const generated = renderCatalog(manifests);
-
-if (checkOnly) {
-  let current = "";
-  try {
-    current = await readFile(outputPath, "utf8");
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-
-  if (current !== generated) {
-    console.error("apps/shell/src/games.generated.ts is out of date.");
-    console.error("Run: pnpm generate:game-catalog");
-    process.exit(1);
-  }
-} else {
-  await writeFile(outputPath, generated);
+export function catalogGameDirs(dirs) {
+  return dirs.filter((name) => !name.startsWith("_")).sort((a, b) => a.localeCompare(b));
 }
 
-function renderCatalog(items) {
+export function renderCatalog(items) {
   const imports = items
     .map(
       ({ dir, identifier }) =>
@@ -65,7 +69,7 @@ ${arrayItems}
 `;
 }
 
-function identifierForGameDir(dir) {
+export function identifierForGameDir(dir) {
   const parts = dir.split(/[^a-zA-Z0-9]+/).filter(Boolean);
   const identifier = parts
     .map((part, index) => {
@@ -77,4 +81,8 @@ function identifierForGameDir(dir) {
 
   if (!identifier) return "gameManifest";
   return /^\d/.test(identifier) ? `game${identifier}` : identifier;
+}
+
+function isMainModule() {
+  return process.argv[1] ? path.resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
 }
