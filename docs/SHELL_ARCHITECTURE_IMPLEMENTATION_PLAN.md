@@ -30,6 +30,9 @@ Completed:
   back to its direct gamepad/keyboard reader when running standalone. Space
   Invaders also exercises a variable 1–4 player roster (mapped by slot), a held
   `shoot` action, and a global `anyStart` edge.
+- Phase 2 promotion: Pong and Space Invaders now declare `forwarded` input in
+  their manifests. Both still keep direct readers as standalone-dev fallbacks
+  when no shell control frame has arrived.
 
 - Keyboard fallback in `@pfp/controls`: `KeyboardControlSource` feeds the
   control frame for any slot whose gamepad is disconnected (gamepad always
@@ -38,7 +41,6 @@ Completed:
 
 Not yet done:
 
-- Promoting Pong/Space Invaders from `hybrid` to `forwarded` once soaked.
 - `@pfp/game-kit`.
 - Starter templates and `scripts/create-game.mjs`.
 - Manifest catalog generation to remove manual shell imports.
@@ -1929,12 +1931,13 @@ Add shell launch settings handshake
 Goal: prove that shell-forwarded controls can be the sole shell input path for
 simple games while keeping standalone dev fallback available.
 
-Current state:
+Completed 2026-06-24:
 
-- Pong and Space Invaders have `input.mode: "hybrid"`.
+- Pong and Space Invaders have `input.mode: "forwarded"`.
 - Both have `ForwardedInputReader`.
 - The shell creates a forwarder for `forwarded` and `hybrid`.
 - Standalone fallback still polls direct input when no forwarded frame exists.
+- Shell catalog tests pin both games to `forwarded`.
 
 Files to inspect/edit:
 

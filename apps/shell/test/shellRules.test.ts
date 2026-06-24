@@ -52,4 +52,11 @@ describe("shell rules", () => {
     expect(usesShellForwardedInput({ input: { mode: "hybrid" } })).toBe(true);
     expect(usesShellForwardedInput({})).toBe(false);
   });
+
+  it("promotes proved simple games to forwarded-only shell input", () => {
+    const inputModeById = new Map(GAME_MANIFESTS.map((game) => [game.id, game.input?.mode]));
+
+    expect(inputModeById.get("pong")).toBe("forwarded");
+    expect(inputModeById.get("space-invaders")).toBe("forwarded");
+  });
 });

@@ -22,9 +22,9 @@ const manifest = {
     survived: { label: "Survived", scope: "match" },
   },
   input: {
-    // Hybrid: the shell forwards normalized control frames, but the game keeps
-    // its direct gamepad/keyboard reader as a fallback for standalone dev.
-    mode: "hybrid",
+    // Forwarded in shell; the game keeps its direct reader as a standalone-dev
+    // fallback when no shell control frame has arrived.
+    mode: "forwarded",
     actions: {
       // -1 = left, +1 = right. Stick is deadzoned shell-side; d-pad snaps to ±1.
       move: [{ source: "leftStickX", deadzone: 0.18 }, { source: "dpadX" }],
