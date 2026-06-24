@@ -7,6 +7,9 @@ iframe and speak the postMessage contract below is a valid game.
 The current supported paths are **SDK-only** and **shell-forwarded controls**:
 a game imports `@pfp/sdk`, handles the lifecycle, and reports a result; it can
 either read its own input or receive normalized control frames from the shell.
+Before implementing a new game, fill out
+[`GAME_SPEC_TEMPLATE.md`](GAME_SPEC_TEMPLATE.md) so controls, scoring, result
+data, and out-of-scope items are explicit.
 The planned game-kit path is documented in
 [`SHELL_ARCHITECTURE_IMPLEMENTATION_PLAN.md`](SHELL_ARCHITECTURE_IMPLEMENTATION_PLAN.md):
 

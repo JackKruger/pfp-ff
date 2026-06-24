@@ -23,6 +23,12 @@ Completed:
 - Phase 1 manifest foundation: real games now have typed
   `games/*/game.manifest.ts` files, and the shell catalog consumes them while
   keeping placeholder games local.
+- Phase 1 catalog generation: `scripts/generate-game-catalog.mjs` generates
+  `apps/shell/src/games.generated.ts`, and `apps/shell/src/games.ts` no longer
+  manually imports every game manifest.
+- Settings handshake: the shell can default, validate, edit, and pass manifest
+  settings through `LaunchContext.settings`; Raskulls uses `raceBots` as the
+  first real consumer.
 - Phase 2 controls foundation: SDK `inputFrame` messages, `@pfp/controls`, and
   conditional shell control-forwarder lifecycle wiring are implemented.
 - Phase 2 proof: Pong and Space Invaders are migrated to `hybrid` input (§4.4).
@@ -33,6 +39,9 @@ Completed:
 - Phase 2 promotion: Pong and Space Invaders now declare `forwarded` input in
   their manifests. Both still keep direct readers as standalone-dev fallbacks
   when no shell control frame has arrived.
+- AI-generated game workflow prep: `docs/GAME_SPEC_TEMPLATE.md` exists so new
+  games can start from an explicit concept, controls, scoring, result, and test
+  plan before code generation.
 
 - Keyboard fallback in `@pfp/controls`: `KeyboardControlSource` feeds the
   control frame for any slot whose gamepad is disconnected (gamepad always
@@ -43,7 +52,6 @@ Not yet done:
 
 - `@pfp/game-kit`.
 - Starter templates and `scripts/create-game.mjs`.
-- Manifest catalog generation to remove manual shell imports.
 
 ---
 
