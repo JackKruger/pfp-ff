@@ -19,8 +19,11 @@ interface ShellState {
 
   navigate(to: Screen): void;
   selectGame(game: GameManifest): void;
+  clearGame(): void;
   setPairedSlots(slots: PairingSlot[]): void;
   setResult(result: GameResult): void;
+  addSessionSlot(gamepadIndex: number): void;
+  removeSessionSlot(gamepadIndex: number): void;
 
   loadData(): Promise<void>;
   createProfile(input: { name: string; color: string }): Promise<void>;
@@ -46,12 +49,36 @@ export const useShell = create<ShellState>((set, get) => ({
     set({ selectedGame: game });
   },
 
+  clearGame() {
+    set({ selectedGame: null });
+  },
+
   setPairedSlots(slots) {
     set({ pairedSlots: slots });
   },
 
   setResult(result) {
     set({ lastResult: result });
+  },
+
+  addSessionSlot(gamepadIndex) {
+    const { pairedSlots } = get();
+    if (pairedSlots.some((s) => s.gamepadIndex === gamepadIndex)) return;
+    const occupied = new Set(pairedSlots.map((s) => s.slot));
+    let slot = 0;
+    while (occupied.has(slot)) slot++;
+    if (slot >= 4) return;
+    set((s) => ({
+      pairedSlots: [...s.pairedSlots, { slot, gamepadIndex, profileId: null }].sort(
+        (a, b) => a.slot - b.slot,
+      ),
+    }));
+  },
+
+  removeSessionSlot(gamepadIndex) {
+    set((s) => ({
+      pairedSlots: s.pairedSlots.filter((sl) => sl.gamepadIndex !== gamepadIndex),
+    }));
   },
 
   async loadData() {
