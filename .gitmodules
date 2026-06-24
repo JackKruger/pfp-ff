@@ -1,0 +1,3 @@
+[submodule "games/stick-smash/upstream"]
+	path = games/stick-smash/upstream
+	url = https://github.com/KreatureofKreation/stick-smash.git

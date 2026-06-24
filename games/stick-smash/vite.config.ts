@@ -7,7 +7,7 @@ export default defineConfig({
   server: { port: 5178, strictPort: true },
   resolve: {
     alias: {
-      "cannon-es": fileURLToPath(new URL("./src/physics/cannon-shim.js", import.meta.url)),
+      "cannon-es": fileURLToPath(new URL("./upstream/src/physics/cannon-shim.js", import.meta.url)),
     },
   },
   optimizeDeps: { exclude: ["@dimforge/rapier3d-compat"] },

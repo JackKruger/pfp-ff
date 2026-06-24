@@ -1,8 +1,9 @@
 // Boot. Rapier WASM init must happen before Game is constructed.
-import { initRapier } from './physics/cannon-shim.js';
+import { initRapier } from '../upstream/src/physics/cannon-shim.js';
 import { createPfpRuntime } from './pfp/PfpRuntime.js';
+import { installPfpExternalMatch } from './pfp/externalMatch.js';
 import { buildStickSmashResult } from './pfp/results.js';
-import './util/__weaponDebug.js';
+import '../upstream/src/util/__weaponDebug.js';
 
 async function boot() {
   const pfpRuntime = createPfpRuntime();
@@ -12,21 +13,22 @@ async function boot() {
     document.getElementById('loading').textContent = 'Physics engine failed to load: ' + (err?.message || err);
     return;
   }
-  const { Game } = await import('./Game.js');
-  const game = new Game({ pfpRuntime });
+  const { Game } = await import('../upstream/src/Game.js');
+  const game = new Game();
   window.game = game;
-  game.onPfpGameOver = ({ winner, players, reason }) => {
-    if (!game._pfp) return;
-    const endedAt = Date.now();
-    pfpRuntime.client.gameOver(buildStickSmashResult({
-      context: game._pfp.context,
-      startedAt: game._pfp.startedAt,
-      endedAt,
-      players,
-      winner,
-      reason,
-    }));
-  };
+  installPfpExternalMatch(game, {
+    controls: pfpRuntime.controls,
+    onGameOver: ({ context, startedAt, endedAt, players, winner, reason }) => {
+      pfpRuntime.client.gameOver(buildStickSmashResult({
+        context,
+        startedAt,
+        endedAt,
+        players,
+        winner,
+        reason,
+      }));
+    },
+  });
 
   pfpRuntime.client.onLaunch((context) => game.startPfpMatch(context));
   pfpRuntime.client.onPause(() => {

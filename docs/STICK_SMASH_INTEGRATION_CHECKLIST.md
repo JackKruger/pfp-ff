@@ -93,15 +93,18 @@ games/stick-smash/
   tsconfig.json
   vite.config.ts
   game.manifest.ts
+  upstream/               # git submodule: original Stick Smash repo
   src/
-    ...
+    main.js               # PFP wrapper boot
+    input/PfpControls.js
+    pfp/
   test/
     pfpControls.test.ts
     resultAdapter.test.ts
 ```
 
-- [x] Vendor upstream Stick Smash files into `games/stick-smash/` after the
-  license/permission step is satisfied.
+- [x] Track upstream Stick Smash as the `games/stick-smash/upstream` git
+  submodule after the license/permission step is satisfied.
 - [x] Convert the upstream import-map setup to Vite package dependencies.
 - [x] Add `package.json`:
 
@@ -216,6 +219,7 @@ presentation: {
 
 ```text
 games/stick-smash/src/pfp/PfpRuntime.js
+games/stick-smash/src/pfp/externalMatch.js
 games/stick-smash/src/input/PfpControls.js
 games/stick-smash/src/pfp/results.js
 ```
@@ -527,9 +531,9 @@ pnpm build
 pnpm --filter @pfp/stick-smash dev
 ```
 
-- [ ] Decide whether to contribute integration hooks back to the original Stick
+- [x] Decide whether to contribute integration hooks back to the original Stick
   Smash repo.
-- [ ] Before opening an upstream PR, rename PFP-specific concepts to neutral
+- [x] Before opening an upstream PR, rename PFP-specific concepts to neutral
   extension points where practical:
   - `startPfpMatch(...)` -> external/shell launch hook.
   - `{ kind: "pfp", slot }` -> generic external input source.
@@ -542,8 +546,8 @@ pnpm --filter @pfp/stick-smash dev
 - [ ] Keep `@pfp/sdk`, `@pfp/controls`, manifest metadata, shell catalog wiring,
   and PFP result conversion in this repo unless upstream explicitly wants an
   optional PFP adapter package.
-- [ ] Document an upstream update workflow for this repo:
+- [x] Document an upstream update workflow for this repo:
   - track the upstream commit in `games/stick-smash/UPSTREAM.md`.
-  - merge or re-vendor upstream changes.
+  - move the `games/stick-smash/upstream` submodule pointer.
   - reapply only the thin adapter layer.
   - run Stick Smash focused checks plus `pnpm test` and `pnpm build`.
