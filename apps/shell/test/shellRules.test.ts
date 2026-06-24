@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BUILT_GAME_IDS } from "../src/buildGames.js";
+import { GAME_MANIFESTS } from "../src/games.generated.js";
 import { GAMES } from "../src/games.js";
 import {
   canStartGame,
@@ -22,6 +23,21 @@ describe("shell rules", () => {
     const ids = GAMES.map((game) => game.id);
 
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("maps every generated manifest into a shell game entry", () => {
+    expect(GAMES.map((game) => game.id).sort()).toEqual(
+      GAME_MANIFESTS.map((game) => game.id).sort(),
+    );
+  });
+
+  it("requires enabled games to declare thumbnails and production entries", () => {
+    for (const manifest of GAME_MANIFESTS) {
+      if (manifest.presentation?.disabled) continue;
+
+      expect(manifest.thumbnail, `${manifest.id} thumbnail`).toBeTruthy();
+      expect(manifest.entry, `${manifest.id} entry`).toBe(`/games/${manifest.id}/index.html`);
+    }
   });
 
   it("marks enabled games as production-built in manifest metadata", () => {

@@ -1,10 +1,5 @@
 import type { GameManifest, GamePresentationCategory } from "@pfp/sdk";
-import raskullsManifest from "../../../games/raskulls/game.manifest.js";
-import pongManifest from "../../../games/pong/game.manifest.js";
-import spaceInvadersManifest from "../../../games/space-invaders/game.manifest.js";
-import ironYardManifest from "../../../games/iron-yard/game.manifest.js";
-import partyMixManifest from "../../../games/party-mix/game.manifest.js";
-import stickSmashManifest from "../../../games/stick-smash/game.manifest.js";
+import { GAME_MANIFESTS } from "./games.generated.js";
 
 /** Filterable library categories shown as tabs in the shell header. */
 export type GameCategory = GamePresentationCategory;
@@ -34,14 +29,7 @@ export interface GameEntry extends GameManifest {
 }
 
 /** Games known to the shell. Disabled entries are placeholders shown as Coming Soon. */
-export const GAMES: GameEntry[] = [
-  toGameEntry(raskullsManifest),
-  toGameEntry(pongManifest),
-  toGameEntry(spaceInvadersManifest),
-  toGameEntry(stickSmashManifest),
-  toGameEntry(ironYardManifest),
-  toGameEntry(partyMixManifest),
-];
+export const GAMES: GameEntry[] = GAME_MANIFESTS.map(toGameEntry);
 
 function toGameEntry(manifest: GameManifest): GameEntry {
   const presentation = manifest.presentation ?? {};

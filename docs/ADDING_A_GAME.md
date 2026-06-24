@@ -83,9 +83,19 @@ const manifest = {
 export default manifest;
 ```
 
-Current shell catalog imports are still explicit, so after adding a manifest,
-wire it into `apps/shell/src/games.ts`. A later catalog-generation step will
-remove that manual shell edit.
+After adding a manifest, regenerate the shell catalog:
+
+```sh
+pnpm generate:game-catalog
+```
+
+This updates `apps/shell/src/games.generated.ts`, which is the generated list
+consumed by `apps/shell/src/games.ts`. Do not edit the generated file by hand.
+Use the check command before committing to catch stale catalog output:
+
+```sh
+pnpm check:game-catalog
+```
 
 For an enabled production game, also add the id to `BUILT_GAME_IDS` in
 `apps/shell/src/buildGames.ts`. The shell build copies only those game `dist/`
