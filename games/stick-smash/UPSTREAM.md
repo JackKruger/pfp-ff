@@ -2,7 +2,8 @@
 
 - Source: https://github.com/KreatureofKreation/stick-smash
 - Submodule path: `games/stick-smash/upstream`
-- Upstream commit: `bbf861119093fe5a03f806c4c2bdbc7340771bc7`
+- Current submodule commit: `4c09534` (`pfp/external-host-hooks`)
+- Upstream `master` base: `bbf861119093fe5a03f806c4c2bdbc7340771bc7`
 - Permission status: the PFP-FF maintainer confirmed in this workspace that the
   upstream owner is collaborating on this shell and allows vendoring Stick Smash
   here.
@@ -18,9 +19,9 @@ standalone. PFP-specific code lives outside that submodule:
 - `src/input/PfpControls.js` maps PFP control frames to Stick Smash snapshots.
 - `src/pfp/results.js` maps Stick Smash players to PFP standings.
 
-When upstream accepts generic host hooks, replace the adapter monkey patches in
-`src/pfp/externalMatch.js` with those public hooks and update the submodule
-pointer.
+The adapter uses generic host hooks from the `pfp/external-host-hooks` upstream
+branch. Once those hooks are merged upstream, move the submodule pointer to the
+merged upstream commit.
 
 ## Updating
 
