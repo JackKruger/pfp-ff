@@ -25,7 +25,8 @@ Completed:
   keeping placeholder games local.
 - Phase 1 catalog generation: `scripts/generate-game-catalog.mjs` generates
   `apps/shell/src/games.generated.ts`, and `apps/shell/src/games.ts` no longer
-  manually imports every game manifest.
+  manually imports every game manifest. Root `pnpm build` runs
+  `pnpm check:game-catalog` before typechecking.
 - Settings handshake: the shell can default, validate, edit, and pass manifest
   settings through `LaunchContext.settings`; Raskulls uses `raceBots` as the
   first real consumer.
