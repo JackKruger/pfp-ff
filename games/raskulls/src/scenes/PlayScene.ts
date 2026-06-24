@@ -140,7 +140,9 @@ export abstract class PlayScene extends Phaser.Scene {
 
     this.grid = setup.grid;
     this.starts = setup.starts;
-    const playerSlots = this.mode === "race" ? withRaceBots(context.players) : context.players;
+    const fillRaceBots = context.settings.raceBots !== false;
+    const playerSlots =
+      this.mode === "race" && fillRaceBots ? withRaceBots(context.players) : context.players;
     this.players = playerSlots.map((player) => this.createPlayer(player, setup.lives));
     this.levelStartedAt = this.time.now;
     this.wallStartedAt = Date.now();

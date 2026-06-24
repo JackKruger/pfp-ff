@@ -3,6 +3,11 @@ import { IndexedDbDataStore } from "@pfp/data";
 import type { GameManifest, GameResult } from "@pfp/sdk";
 import type { MatchRecord, Profile } from "@pfp/data";
 import type { PairingSlot } from "@pfp/input";
+import {
+  defaultSettingsFor,
+  setGameSetting,
+  type GameSettingsState,
+} from "./gameSettings.js";
 
 export type Screen = "home" | "profiles" | "pairing" | "game" | "results" | "stats";
 
@@ -12,6 +17,7 @@ interface ShellState {
   screen: Screen;
   dataReady: boolean;
   selectedGame: GameManifest | null;
+  selectedGameSettings: GameSettingsState;
   pairedSlots: PairingSlot[];
   lastResult: GameResult | null;
   profiles: Profile[];
@@ -19,6 +25,8 @@ interface ShellState {
 
   navigate(to: Screen): void;
   selectGame(game: GameManifest): void;
+  setSelectedGameSettings(settings: GameSettingsState): void;
+  updateSelectedGameSetting(id: string, value: unknown): void;
   setPairedSlots(slots: PairingSlot[]): void;
   setResult(result: GameResult): void;
 
@@ -33,6 +41,7 @@ export const useShell = create<ShellState>((set, get) => ({
   screen: "home",
   dataReady: false,
   selectedGame: null,
+  selectedGameSettings: {},
   pairedSlots: [],
   lastResult: null,
   profiles: [],
@@ -43,7 +52,25 @@ export const useShell = create<ShellState>((set, get) => ({
   },
 
   selectGame(game) {
-    set({ selectedGame: game });
+    set({ selectedGame: game, selectedGameSettings: defaultSettingsFor(game) });
+  },
+
+  setSelectedGameSettings(settings) {
+    set({ selectedGameSettings: settings });
+  },
+
+  updateSelectedGameSetting(id, value) {
+    set((state) => {
+      if (!state.selectedGame) return state;
+      return {
+        selectedGameSettings: setGameSetting(
+          state.selectedGame,
+          state.selectedGameSettings,
+          id,
+          value,
+        ),
+      };
+    });
   },
 
   setPairedSlots(slots) {

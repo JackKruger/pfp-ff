@@ -6,12 +6,21 @@ import { Btn } from "../components/Btn.js";
 import { useShell } from "../store.js";
 import { useShellTicker } from "../ticker.js";
 import { canStartGame } from "../shellRules.js";
+import type { GameSettingDef } from "@pfp/sdk";
 
 // Negative indices are keyboard-only slots and never real Gamepad API indices.
 const keyboardGamepadIndex = (slot: number): number => -slot - 1;
 
 export function PairingScreen() {
-  const { navigate, selectedGame, pairedSlots, setPairedSlots, profiles } = useShell();
+  const {
+    navigate,
+    selectedGame,
+    selectedGameSettings,
+    updateSelectedGameSetting,
+    pairedSlots,
+    setPairedSlots,
+    profiles,
+  } = useShell();
   const ticker = useShellTicker();
   const gamepadSlotsRef = useRef<PairingSlot[]>([]);
   const keyboardSlotsRef = useRef<PairingSlot[]>([]);
@@ -217,9 +226,23 @@ export function PairingScreen() {
         })}
       </div>
 
-      <p className="pairing-screen__hint">
-        Ⓐ join · Ⓑ leave · ◀ ▶ profile · Start to begin
-      </p>
+      <p className="pairing-screen__hint">Ⓐ join · Ⓑ leave · ◀ ▶ profile · Start to begin</p>
+
+      {selectedGame?.settings?.fields.length ? (
+        <section className="pairing-settings" aria-label={`${selectedGame.name} settings`}>
+          <h3>Game Settings</h3>
+          <div className="pairing-settings__fields">
+            {selectedGame.settings.fields.map((field) => (
+              <SettingControl
+                key={field.id}
+                field={field}
+                value={selectedGameSettings[field.id] ?? field.default}
+                onChange={(value) => updateSelectedGameSetting(field.id, value)}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className="pairing-screen__actions">
         <Btn id="pairing-back" onClick={() => navigate("home")} variant="ghost" autoFocus>
@@ -234,6 +257,61 @@ export function PairingScreen() {
         <p className="pairing-screen__need">Best with {minPlayers}+ players</p>
       )}
     </div>
+  );
+}
+
+function SettingControl({
+  field,
+  value,
+  onChange,
+}: {
+  field: GameSettingDef;
+  value: unknown;
+  onChange: (value: unknown) => void;
+}) {
+  if (field.type === "boolean") {
+    return (
+      <label className="pairing-settings__field pairing-settings__field--toggle">
+        <span>{field.label}</span>
+        <input
+          type="checkbox"
+          checked={value === true}
+          onChange={(event) => onChange(event.currentTarget.checked)}
+        />
+      </label>
+    );
+  }
+
+  if (field.type === "number") {
+    return (
+      <label className="pairing-settings__field">
+        <span>{field.label}</span>
+        <input
+          type="number"
+          min={field.min}
+          max={field.max}
+          step={field.step ?? 1}
+          value={typeof value === "number" ? value : field.default}
+          onChange={(event) => onChange(Number(event.currentTarget.value))}
+        />
+      </label>
+    );
+  }
+
+  return (
+    <label className="pairing-settings__field">
+      <span>{field.label}</span>
+      <select
+        value={typeof value === "string" ? value : field.default}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      >
+        {field.options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

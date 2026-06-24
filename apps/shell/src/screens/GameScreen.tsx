@@ -11,6 +11,7 @@ import { useShell } from "../store.js";
 import { useShellTicker } from "../ticker.js";
 import type { GameHost } from "@pfp/sdk";
 import { PLAYER_COLORS } from "../games.js";
+import { validateSettingsFor } from "../gameSettings.js";
 import { recordMatchBestEffort } from "../gameOver.js";
 import { usesShellForwardedInput } from "../shellRules.js";
 import {
@@ -26,7 +27,15 @@ import {
 const LOAD_TIMEOUT_MS = 8_000;
 
 export function GameScreen() {
-  const { selectedGame, pairedSlots, profiles, setResult, recordMatch, navigate } = useShell();
+  const {
+    selectedGame,
+    selectedGameSettings,
+    pairedSlots,
+    profiles,
+    setResult,
+    recordMatch,
+    navigate,
+  } = useShell();
   const ticker = useShellTicker();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const hostRef = useRef<GameHost | null>(null);
@@ -208,6 +217,14 @@ export function GameScreen() {
 
     host.onReady(() => {
       if (closed) return;
+      const settings = validateSettingsFor(game, selectedGameSettings);
+      if (!settings.ok) {
+        console.error("Invalid game settings:", settings.errors);
+        setPhase("error");
+        closeIframe();
+        return;
+      }
+
       const players = pairedSlotsRef.current.map((slot) => {
         const profile = profilesRef.current.find((p) => p.id === slot.profileId);
         return {
@@ -223,7 +240,7 @@ export function GameScreen() {
         sessionId: crypto.randomUUID(),
         sdkVersion: SDK_VERSION,
         players,
-        settings: {},
+        settings: settings.value,
       };
 
       host.launch(context);
@@ -279,7 +296,7 @@ export function GameScreen() {
       if (hostRef.current === host) hostRef.current = null;
       iframe.src = "about:blank";
     };
-  }, [selectedGame, setResult, recordMatch, navigate, ticker]);
+  }, [selectedGame, selectedGameSettings, setResult, recordMatch, navigate, ticker]);
 
   if (!selectedGame) {
     return (
