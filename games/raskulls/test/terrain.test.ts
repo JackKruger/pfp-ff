@@ -243,6 +243,40 @@ describe("raskulls terrain", () => {
     expect(grid.get(1, 2)).toBe("grayBlock");
   });
 
+  it("does not drop steel blocks (they are not falling blocks)", () => {
+    const grid = new TerrainGrid(4, 6);
+    grid.set(1, 1, "stone");
+    // steel placed floating — it should NOT fall, it is a solid fixed block
+    grid.setCell(2, 1, { kind: "steel" });
+
+    const drops = grid.settleBlockGravity();
+
+    // stone is not a dropable block kind, steel is not either
+    expect(drops.filter((d) => d.fromX === 1 || d.fromX === 2)).toHaveLength(0);
+    expect(grid.get(1, 1)).toBe("stone");
+    expect(grid.get(2, 1)).toBe("stone"); // steel maps to stone tile
+  });
+
+  it("does not chain-explode gray blocks of different colors", () => {
+    const grid = new TerrainGrid(6, 5);
+    // Mix gray with colored blocks — gray group is only 2
+    grid.set(1, 1, "grayBlock");
+    grid.set(2, 1, "grayBlock");
+    grid.set(3, 1, "redBlock");
+    grid.set(4, 1, "redBlock");
+    grid.set(3, 2, "redBlock");
+    grid.set(4, 2, "redBlock");
+
+    const explosions = grid.resolveGrayChainExplosions();
+
+    // Only 2 grays: no explosion
+    expect(explosions).toHaveLength(0);
+    expect(grid.get(1, 1)).toBe("grayBlock");
+    expect(grid.get(2, 1)).toBe("grayBlock");
+    // Red blocks untouched
+    expect(grid.get(3, 1)).toBe("redBlock");
+  });
+
   it("re-runs gray explosions after gravity creates a new group", () => {
     const grid = new TerrainGrid(7, 7);
     for (let x = 1; x <= 5; x++) grid.set(x, 6, "stone");

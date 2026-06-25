@@ -7,6 +7,21 @@ import {
   rankGrandPrix,
 } from "../systems/playlist.js";
 
+const WIN_QUIPS = [
+  "Dug faster, won harder.",
+  "The blocks never stood a chance.",
+  "Bones are for the losers.",
+  "First to the finish, first in our hearts.",
+  "Skulls out, glory in.",
+  "Speed is a state of mind. A very fast mind.",
+];
+
+const RIVAL_QUIPS = [
+  "{winner} barely edged out {loser}.",
+  "{winner} and {loser} nearly cracked the same skull.",
+  "A whisker of bone separated {winner} from {loser}.",
+];
+
 export class ResultsScene extends Phaser.Scene {
   private sent = false;
 
@@ -57,6 +72,43 @@ export class ResultsScene extends Phaser.Scene {
         color: "#cbd5e1",
       });
     });
+
+    // Winner quip
+    const winner = sorted[0];
+    const runnerUp = sorted[1];
+    if (winner) {
+      const winnerPlayer = context.players.find((p) => p.slot === winner.slot);
+      const winnerName = winnerPlayer?.displayName ?? `P${winner.slot + 1}`;
+      const quipIndex = (winner.slot + completed.startedAt) % WIN_QUIPS.length;
+      const quip = WIN_QUIPS[quipIndex] ?? WIN_QUIPS[0]!;
+      this.add.text(112, 132 - 26, quip, {
+        fontFamily: "Segoe UI, sans-serif",
+        fontSize: "15px",
+        fontStyle: "italic",
+        color: "#facc15",
+      });
+
+      // Rivalry blurb for close finishes (within 2s)
+      if (
+        runnerUp &&
+        winner.stats.finishMs !== undefined &&
+        runnerUp.stats.finishMs !== undefined &&
+        Math.abs(winner.stats.finishMs - runnerUp.stats.finishMs) <= 2000
+      ) {
+        const loserPlayer = context.players.find((p) => p.slot === runnerUp.slot);
+        const loserName = loserPlayer?.displayName ?? `P${runnerUp.slot + 1}`;
+        const rivalIdx = winner.slot % RIVAL_QUIPS.length;
+        const rivalQuip = (RIVAL_QUIPS[rivalIdx] ?? RIVAL_QUIPS[0]!)
+          .replace("{winner}", winnerName)
+          .replace("{loser}", loserName);
+        this.add.text(54, 132 + sorted.length * 74 + 12, rivalQuip, {
+          fontFamily: "Segoe UI, sans-serif",
+          fontSize: "17px",
+          fontStyle: "italic",
+          color: "#fb923c",
+        });
+      }
+    }
 
     if (grandPrix && !completed.grandPrixFinal) {
       const standings = rankGrandPrix(grandPrix);
