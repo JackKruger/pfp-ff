@@ -61,12 +61,14 @@ export function applyGrandPrixRound(state: GrandPrixState, ranked: RankedPlayer[
 
 export function rankGrandPrix(state: GrandPrixState): RankedPlayer[] {
   const sorted = [...state.entries].sort((a, b) => {
+    // Primary: cumulative round points
     if (a.points !== b.points) return b.points - a.points;
+    // Tiebreaker: best individual finish time across all rounds
     if (a.stats.finishMs !== b.stats.finishMs) {
       return (a.stats.finishMs ?? Infinity) - (b.stats.finishMs ?? Infinity);
     }
-    if (a.stats.gems !== b.stats.gems) return b.stats.gems - a.stats.gems;
-    return b.stats.blocksBroken - a.stats.blocksBroken;
+    // Final tiebreaker: slot for determinism
+    return a.slot - b.slot;
   });
 
   return sorted.map((entry, index) => ({

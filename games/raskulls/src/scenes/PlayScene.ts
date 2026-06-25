@@ -624,24 +624,46 @@ export abstract class PlayScene extends Phaser.Scene {
         const b = this.players[j]!;
         if (!a.alive || !b.alive || a.finished || b.finished) continue;
         if (!rectsOverlap(playerRect(a), playerRect(b))) continue;
-        this.resolveHit(a, b, time);
-        this.resolveHit(b, a, time);
+        // Try each player as "attacker" — frenzy player shoves the other.
+        // Regular overlap is handled once inside resolveHit when neither is in frenzy.
+        const aFrenzy = a.frenzyActive;
+        const bFrenzy = b.frenzyActive;
+        if (aFrenzy || bFrenzy) {
+          if (aFrenzy) this.resolveHit(a, b, time);
+          if (bFrenzy) this.resolveHit(b, a, time);
+        } else {
+          // Neither in frenzy: simple separation (run once)
+          this.resolveHit(a, b, time);
+        }
       }
     }
   }
 
   private resolveHit(attacker: PlayPlayer, victim: PlayPlayer, time: number): void {
-    if (!attacker.frenzyActive || time < victim.shieldUntil) {
-      const direction = attacker.x < victim.x ? -1 : 1;
-      attacker.vx = direction * this.tuning.overlapKnockbackX;
-      victim.vx = -direction * this.tuning.overlapKnockbackX;
+    const direction = attacker.x < victim.x ? -1 : 1;
+
+    // Frenzy shove blocked by shield: reflect the attacker back
+    if (attacker.frenzyActive && time < victim.shieldUntil) {
+      attacker.vx = -attacker.facing * this.tuning.frenzyHitKnockbackX * 0.55;
+      attacker.vy = Math.min(attacker.vy, -this.tuning.frenzyHitKnockbackY * 0.45);
+      // Visual shield pulse
+      victim.shieldView.setScale(1.18);
+      this.tweens.add({ targets: victim.shieldView, scale: 1, duration: 130 });
       return;
     }
 
-    victim.lastHitBy = attacker.slot;
-    victim.stunnedUntil = time + this.tuning.frenzyHitStunMs;
-    victim.vx = attacker.facing * this.tuning.frenzyHitKnockbackX;
-    victim.vy = -this.tuning.frenzyHitKnockbackY;
+    // Frenzy shove hits unshielded victim
+    if (attacker.frenzyActive) {
+      victim.lastHitBy = attacker.slot;
+      victim.stunnedUntil = time + this.tuning.frenzyHitStunMs;
+      victim.vx = attacker.facing * this.tuning.frenzyHitKnockbackX;
+      victim.vy = -this.tuning.frenzyHitKnockbackY;
+      return;
+    }
+
+    // Regular body overlap: small bounce-apart, no stun
+    attacker.vx = direction * this.tuning.overlapKnockbackX;
+    victim.vx = -direction * this.tuning.overlapKnockbackX;
   }
 
   private renderTerrain(): void {
