@@ -147,11 +147,15 @@ async function main() {
     await wait(2000);
     await shot(page, "raskulls-mode-select");   // Mode select (before launch)
 
+    // Inject launch so session.context is set — mode select won't process
+    // input until context exists. Then press Space (=jump) to start Race mode.
     await launch(page, 2);
-    await wait(3000);
-    await shot(page, "raskulls-race-start");    // Level start / pre-race overlay
+    await wait(400);                            // one render cycle for context to land
+    await page.keyboard.press("Space");
+    await wait(3500);
+    await shot(page, "raskulls-race-start");    // Level loaded, pre-race overlay
 
-    await wait(6000);
+    await wait(7000);
     await shot(page, "raskulls-race-mid");      // Mid-race gameplay
 
     await page.close();
@@ -231,14 +235,17 @@ async function main() {
 
     await page.goto(`${url}${path}`, { waitUntil: "networkidle", timeout: 15000 });
     await wait(1500);
-    await shot(page, "stick-smash-attract");    // Waiting for launch
+    await shot(page, "stick-smash-attract");    // Attract screen
 
+    // Rapier WASM + upstream Game init can take 5-8s. Wait for it before
+    // injecting launch so onLaunch is registered before the message arrives.
+    await wait(7000);
     await launch(page, 2);
-    await wait(4000);
-    await shot(page, "stick-smash-start");      // Match start
-
     await wait(5000);
-    await shot(page, "stick-smash-gameplay");   // Combat
+    await shot(page, "stick-smash-start");      // Match loaded
+
+    await wait(6000);
+    await shot(page, "stick-smash-gameplay");   // Gameplay in progress
 
     await page.close();
   }
