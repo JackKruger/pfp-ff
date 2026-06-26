@@ -14,6 +14,7 @@ function makeState(): GameState {
     pieces: [],
     actors: [],
     cursors: [],
+    runtime: new Map(),
     lastRound: null,
     history: [],
     nextUid: 1,

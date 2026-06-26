@@ -20,7 +20,9 @@ import {
 } from "../constants.js";
 import { pieceAabb, PIECES } from "../pieces/registry.js";
 import type { Aabb, PlacedPiece, PlayerFrame, RaceActor } from "../types.js";
-import { sweep } from "./aabb.js";
+import { overlaps, sweep } from "./aabb.js";
+
+const LADDER_CLIMB_SPEED = 220;
 
 /**
  * One fixed-timestep advance of a single race actor.
@@ -101,13 +103,32 @@ export function stepActor(
     }
   }
 
-  // --- Gravity --------------------------------------------------------------
-  const slidingWall =
-    wallSide !== 0 && actor.vy > 0 && Math.sign(wantX) === wallSide;
-  const gMul = slidingWall ? WALL_SLIDE_GRAVITY_MUL : 1;
-  actor.vy += GRAVITY * gMul * FIXED_DT;
-  const fallCap = slidingWall ? WALL_SLIDE_MAX : MAX_FALL;
-  if (actor.vy > fallCap) actor.vy = fallCap;
+  // --- Ladder override ------------------------------------------------------
+  // Ladders short-circuit gravity entirely while the actor's hitbox overlaps
+  // them. moveY climbs/descends; jump kicks off normally.
+  const playerBounds: Aabb = { x: actor.x, y: actor.y, w: PLAYER_W, h: PLAYER_H };
+  const onLadder = pieces.some(
+    (p) => p.pieceId === "ladder" && overlaps(playerBounds, pieceAabb(p)),
+  );
+
+  if (onLadder && actor.vy >= 0) {
+    // Treat ladder hold as "ground" for jump-buffer purposes (but only if not
+    // already coming down from a jump — we keep variable-cut intact).
+    actor.timeSinceGrounded = 0;
+    if (Math.abs(frame.moveY) > 0.05) {
+      actor.vy = frame.moveY * LADDER_CLIMB_SPEED;
+    } else {
+      actor.vy = 0;
+    }
+  } else {
+    // --- Gravity ------------------------------------------------------------
+    const slidingWall =
+      wallSide !== 0 && actor.vy > 0 && Math.sign(wantX) === wallSide;
+    const gMul = slidingWall ? WALL_SLIDE_GRAVITY_MUL : 1;
+    actor.vy += GRAVITY * gMul * FIXED_DT;
+    const fallCap = slidingWall ? WALL_SLIDE_MAX : MAX_FALL;
+    if (actor.vy > fallCap) actor.vy = fallCap;
+  }
 
   // --- Move + collide -------------------------------------------------------
   const dx = actor.vx * FIXED_DT;

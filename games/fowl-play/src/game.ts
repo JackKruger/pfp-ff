@@ -1,5 +1,5 @@
 import type { LaunchContext } from "@pfp/sdk";
-import { LOOK_AROUND_MS, WIN_SCORE } from "./constants.js";
+import { FINAL_HOLD_MS, LOOK_AROUND_MS, WIN_SCORE } from "./constants.js";
 import { pickArena } from "./arenas/index.js";
 import { beginPlacement, tickPlacement } from "./phases/placement.js";
 import {
@@ -28,6 +28,7 @@ export function createGame(launch: LaunchContext): GameState {
     pieces: [],
     actors: [],
     cursors: [],
+    runtime: new Map(),
     lastRound: null,
     history: [],
     nextUid: 1,
@@ -86,7 +87,8 @@ export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): 
       if (!done) return false;
       if (matchIsOver(state) && hasClearWinner(state)) {
         state.phase = "final";
-        return true;
+        state.phaseTimer = FINAL_HOLD_MS;
+        return false;
       }
       // Next round
       state.round++;
@@ -97,8 +99,10 @@ export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): 
       return false;
     }
 
-    case "final":
-      return true;
+    case "final": {
+      state.phaseTimer = Math.max(0, state.phaseTimer - dtMs);
+      return state.phaseTimer <= 0;
+    }
   }
 }
 

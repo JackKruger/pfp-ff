@@ -212,6 +212,33 @@ export interface RoundLog {
   delta: Map<number, number>;
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Mover runtime                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Per-piece dynamic state during the race phase. Movers (crusher, mace,
+ * pendulum, log, puck, fan) need timers + velocities the static PlacedPiece
+ * doesn't carry. Stored in a parallel Map<uid, RuntimePiece> on GameState so
+ * the placed pieces stay describing the placement, and runtime is wiped at
+ * the start of each race.
+ */
+export interface RuntimePiece {
+  uid: number;
+  /** Original placement position; mutating piece.x/y is fine but we keep this for swing pivots etc. */
+  origX: number;
+  origY: number;
+  /** Animation timer (ms). */
+  t: number;
+  /** Sub-state, free-form per piece type. */
+  state: string;
+  /** Linear velocity for puck, log, etc. */
+  vx: number;
+  vy: number;
+  /** One-shot pieces (log after landing, puck after timeout) can self-disable. */
+  active: boolean;
+}
+
 export interface GameState {
   phase: Phase;
   /** ms remaining in the current phase. */
@@ -226,6 +253,8 @@ export interface GameState {
   actors: RaceActor[];
   /** Placement cursors (one per active player, only during placement). */
   cursors: PlacementCursor[];
+  /** Mover runtime state, keyed by piece uid; populated at race start. */
+  runtime: Map<number, RuntimePiece>;
   /** Most-recent round log for the score phase to display. */
   lastRound: RoundLog | null;
   /** All round logs since match start. */

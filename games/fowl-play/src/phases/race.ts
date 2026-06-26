@@ -13,6 +13,7 @@ import {
 } from "../constants.js";
 import { overlaps } from "../physics/aabb.js";
 import { stepActor } from "../physics/player.js";
+import { initRuntimeFor, pieceIsLethal, tickMovers } from "../pieces/movers.js";
 import { pieceAabb, PIECES } from "../pieces/registry.js";
 import type {
   Aabb,
@@ -31,6 +32,11 @@ import type {
 export function beginRace(state: GameState): void {
   state.phase = "race";
   state.phaseTimer = RACE_COUNTDOWN_MS + RACE_MAX_MS;
+  state.runtime = new Map();
+  for (const piece of state.pieces) {
+    const rt = initRuntimeFor(piece);
+    if (rt) state.runtime.set(piece.uid, rt);
+  }
   state.actors = state.players
     .filter((p) => p.active)
     .map<RaceActor>((p) => ({
@@ -59,6 +65,12 @@ export function raceIsCountdown(state: GameState): boolean {
   // First RACE_COUNTDOWN_MS of the phaseTimer is the countdown window.
   const elapsed = RACE_COUNTDOWN_MS + RACE_MAX_MS - state.phaseTimer;
   return elapsed < RACE_COUNTDOWN_MS;
+}
+
+/** ms remaining in the pre-race countdown (or 0 if past). */
+export function countdownRemainingMs(state: GameState): number {
+  if (state.phase !== "race") return 0;
+  return Math.max(0, state.phaseTimer - RACE_MAX_MS);
 }
 
 export function raceTimeLeftMs(state: GameState): number {
@@ -108,13 +120,8 @@ function advancePhysics(state: GameState, frames: PlayerFrame[], dtMs: number): 
 /*  World object dynamics                                                     */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Movers (mace, pendulum, falling log, crusher cycle, puck launch, fan force)
- * are scaffolded but not fully animated in v1 — they're treated as their
- * static AABBs until their dynamics are implemented. TODO: per-piece tick.
- */
-function advanceWorldObjects(_state: GameState, _dtMs: number): void {
-  // Placeholder. See pieces/mover.ts (planned) for swing/drop/launch dynamics.
+function advanceWorldObjects(state: GameState, dtMs: number): void {
+  tickMovers(state, dtMs);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -165,7 +172,9 @@ function resolveContacts(state: GameState): void {
           break;
         }
         default:
-          if (def.lethal) killActor(state, actor, piece.placedBy);
+          if (def.lethal && pieceIsLethal(piece, state.runtime.get(piece.uid))) {
+            killActor(state, actor, piece.placedBy);
+          }
           break;
       }
       if (!actor.alive) break;
