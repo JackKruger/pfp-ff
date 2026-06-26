@@ -83,44 +83,58 @@ async function main() {
     process.exit(1);
   }
 
-  const browser = await chromium.launch({ headless: true });
+  const executablePath =
+    process.env.PLAYWRIGHT_BROWSERS_PATH
+      ? join(process.env.PLAYWRIGHT_BROWSERS_PATH, "chromium")
+      : "/opt/pw-browsers/chromium";
+
+  const browser = await chromium.launch({ headless: true, executablePath });
   const ctx = await browser.newContext({ viewport: VIEWPORT });
 
   // ── Shell ──────────────────────────────────────────────────────────────────
   if (up.shell) {
     console.log("\n=== Shell ===");
-    const page = await ctx.newPage();
     const base = SERVERS.shell.url;
 
-    // Home screen
-    await page.goto(`${base}/`, { waitUntil: "networkidle", timeout: 15000 });
-    await wait(2000);
-    await shot(page, "shell-home");
+    // Navigate Zustand store directly via Vite's module graph — reliable across
+    // all screens without depending on keyboard/focus state.
+    async function shellScreen(screen, setup) {
+      const page = await ctx.newPage();
+      await page.goto(`${base}/`, { waitUntil: "networkidle", timeout: 15000 });
+      await wait(1500);
+      if (setup) await setup(page);
+      if (screen !== "home") {
+        await page.evaluate(async (s) => {
+          const { useShell } = await import("/src/store.ts");
+          useShell.getState().navigate(s);
+        }, screen);
+        await wait(800);
+      }
+      return page;
+    }
 
-    // Pairing screen — hero-play gets autoFocus on load, Enter selects it
-    await page.keyboard.press("Enter");
-    await wait(1000);
-    await shot(page, "shell-pairing");
+    // Home
+    const home = await shellScreen("home");
+    await shot(home, "shell-home");
+    await home.close();
 
-    // Back to home
-    await page.keyboard.press("Escape");
-    await wait(600);
+    // Pairing — needs a game selected first; hero-play is autoFocused so Enter works
+    const pairing = await shellScreen("home", async (p) => {
+      await p.keyboard.press("Enter");
+      await wait(600);
+    });
+    await shot(pairing, "shell-pairing");
+    await pairing.close();
 
-    // Profiles screen
-    await page.getByRole("button", { name: /Profiles/i }).click();
-    await wait(1000);
-    await shot(page, "shell-profiles");
+    // Profiles
+    const profiles = await shellScreen("profiles");
+    await shot(profiles, "shell-profiles");
+    await profiles.close();
 
-    // Back to home
-    await page.keyboard.press("Escape");
-    await wait(600);
-
-    // Stats screen
-    await page.getByRole("button", { name: /Stats/i }).click();
-    await wait(1000);
-    await shot(page, "shell-stats");
-
-    await page.close();
+    // Stats
+    const stats = await shellScreen("stats");
+    await shot(stats, "shell-stats");
+    await stats.close();
   }
 
   // ── Raskulls ───────────────────────────────────────────────────────────────
