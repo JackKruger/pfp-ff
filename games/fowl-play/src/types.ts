@@ -154,6 +154,12 @@ export interface Player {
 
 export type Phase = "intro" | "placement" | "race" | "score" | "final";
 
+/** Match configuration; surfaces in launch.settings. */
+export interface GameConfig {
+  winScore: number;
+  handSize: number;
+}
+
 /** Per-player live racing state (only meaningful during race phase). */
 export interface RaceActor {
   slot: number;
@@ -213,6 +219,32 @@ export interface RoundLog {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Visual feedback                                                           */
+/* -------------------------------------------------------------------------- */
+
+/** A short text that floats up and fades — used for "+1", "TRAP KILL", etc. */
+export interface FloatingText {
+  x: number;
+  y: number;
+  vy: number;
+  text: string;
+  color: string;
+  life: number;
+  maxLife: number;
+}
+
+/** A point-particle used for death bursts and similar VFX. */
+export interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  color: string;
+  life: number;
+  maxLife: number;
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Mover runtime                                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -255,6 +287,14 @@ export interface GameState {
   cursors: PlacementCursor[];
   /** Mover runtime state, keyed by piece uid; populated at race start. */
   runtime: Map<number, RuntimePiece>;
+  /** Score popups and other text VFX, world-space, decay each tick. */
+  floats: FloatingText[];
+  /** Death particles + small VFX bursts, world-space. */
+  particles: Particle[];
+  /** True while the shell has paused the game. */
+  paused: boolean;
+  /** Match-level configuration, optionally overridden by launch.settings. */
+  config: GameConfig;
   /** Most-recent round log for the score phase to display. */
   lastRound: RoundLog | null;
   /** All round logs since match start. */

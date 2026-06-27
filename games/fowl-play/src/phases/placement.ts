@@ -1,4 +1,4 @@
-import { GRID, HAND_SIZE, PLACEMENT_MS } from "../constants.js";
+import { GRID, PLACEMENT_MS } from "../constants.js";
 import { contains, distToAabb, overlaps } from "../physics/aabb.js";
 import { HAND_POOL, PIECES, makePlaced, pieceAabb } from "../pieces/registry.js";
 import type {
@@ -18,7 +18,7 @@ const CURSOR_SPEED = 360; // px/sec while stick is held
 /* -------------------------------------------------------------------------- */
 
 /** Deterministic hand draw using a simple LCG so tests can fix seeds. */
-export function drawHand(seed: number, size = HAND_SIZE): PieceId[] {
+export function drawHand(seed: number, size: number): PieceId[] {
   let s = (seed | 0) || 1;
   const hand: PieceId[] = [];
   for (let i = 0; i < size; i++) {
@@ -43,7 +43,7 @@ export function beginPlacement(state: GameState, baseSeed: number): void {
       y: state.arena.start.y - 24,
       rot: 0,
       handIdx: 0,
-      hand: drawHand(baseSeed + state.round * 31 + p.slot),
+      hand: drawHand(baseSeed + state.round * 31 + p.slot, state.config.handSize),
       confirmed: false,
       lastPlacedUid: null,
     }));

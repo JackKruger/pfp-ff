@@ -1,5 +1,5 @@
 import type { LaunchContext } from "@pfp/sdk";
-import { FINAL_HOLD_MS, LOOK_AROUND_MS, WIN_SCORE } from "./constants.js";
+import { FINAL_HOLD_MS, HAND_SIZE, LOOK_AROUND_MS, WIN_SCORE } from "./constants.js";
 import { pickArena } from "./arenas/index.js";
 import { beginPlacement, tickPlacement } from "./phases/placement.js";
 import {
@@ -8,7 +8,12 @@ import {
   tickRace,
 } from "./phases/race.js";
 import { beginScore, computeStandings, matchIsOver, tickScore } from "./phases/score.js";
-import { makePlayers, type GameState, type PlayerFrame } from "./types.js";
+import {
+  makePlayers,
+  type GameConfig,
+  type GameState,
+  type PlayerFrame,
+} from "./types.js";
 import { makePlaced } from "./pieces/registry.js";
 
 /* -------------------------------------------------------------------------- */
@@ -18,6 +23,7 @@ import { makePlaced } from "./pieces/registry.js";
 export function createGame(launch: LaunchContext): GameState {
   const players = makePlayers(launch);
   const arena = pickArena(1);
+  const config = parseConfig(launch.settings);
 
   const state: GameState = {
     phase: "intro",
@@ -29,6 +35,10 @@ export function createGame(launch: LaunchContext): GameState {
     actors: [],
     cursors: [],
     runtime: new Map(),
+    floats: [],
+    particles: [],
+    paused: false,
+    config,
     lastRound: null,
     history: [],
     nextUid: 1,
@@ -39,6 +49,19 @@ export function createGame(launch: LaunchContext): GameState {
 
   seedArenaScorers(state);
   return state;
+}
+
+/**
+ * Coerces launch.settings (free-form `Record<string, unknown>`) into a strongly
+ * typed GameConfig, falling back to defaults for missing or malformed values.
+ */
+function parseConfig(settings: Record<string, unknown>): GameConfig {
+  const winScore = Number.parseInt(String(settings.winScore ?? WIN_SCORE), 10);
+  const handSize = Number.parseInt(String(settings.handSize ?? HAND_SIZE), 10);
+  return {
+    winScore: Number.isFinite(winScore) && winScore > 0 ? winScore : WIN_SCORE,
+    handSize: Number.isFinite(handSize) && handSize > 0 ? handSize : HAND_SIZE,
+  };
 }
 
 function seedArenaScorers(state: GameState): void {

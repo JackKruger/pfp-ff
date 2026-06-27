@@ -1,6 +1,12 @@
 import {
   FIXED_MS,
+  FLOAT_LIFE_MS,
+  FLOAT_RISE_SPEED,
   MAX_SUBSTEPS,
+  PARTICLE_BURST_COUNT,
+  PARTICLE_GRAVITY,
+  PARTICLE_LIFE_MS,
+  PARTICLE_SPEED,
   PLAYER_H,
   PLAYER_W,
   RACE_COUNTDOWN_MS,
@@ -10,6 +16,7 @@ import {
   SCORE_FINISH,
   SCORE_LONE_SURVIVOR,
   SCORE_TRAP_KILL,
+  SPAWN_STAGGER_PX,
 } from "../constants.js";
 import { overlaps } from "../physics/aabb.js";
 import { stepActor } from "../physics/player.js";
@@ -33,32 +40,36 @@ export function beginRace(state: GameState): void {
   state.phase = "race";
   state.phaseTimer = RACE_COUNTDOWN_MS + RACE_MAX_MS;
   state.runtime = new Map();
+  state.floats = [];
+  state.particles = [];
   for (const piece of state.pieces) {
     const rt = initRuntimeFor(piece);
     if (rt) state.runtime.set(piece.uid, rt);
   }
-  state.actors = state.players
-    .filter((p) => p.active)
-    .map<RaceActor>((p) => ({
-      slot: p.slot,
-      x: state.arena.start.x - PLAYER_W / 2,
-      y: state.arena.start.y - PLAYER_H,
-      vx: 0,
-      vy: 0,
-      alive: true,
-      finished: false,
-      finishedAt: 0,
-      diedAt: 0,
-      deathPos: null,
-      killedBy: -1,
-      contact: "none",
-      timeSinceGrounded: 0,
-      jumpBuffer: 0,
-      jumpHeld: false,
-      jumpAge: 0,
-      roundCoins: 0,
-      diamondsThisRound: 0,
-    }));
+  const activePlayers = state.players.filter((p) => p.active);
+  // Stagger spawn positions so players don't perfectly overlap. Centered
+  // around state.arena.start.x so the camera framing is balanced.
+  const span = (activePlayers.length - 1) * SPAWN_STAGGER_PX;
+  state.actors = activePlayers.map<RaceActor>((p, i) => ({
+    slot: p.slot,
+    x: state.arena.start.x - PLAYER_W / 2 + i * SPAWN_STAGGER_PX - span / 2,
+    y: state.arena.start.y - PLAYER_H,
+    vx: 0,
+    vy: 0,
+    alive: true,
+    finished: false,
+    finishedAt: 0,
+    diedAt: 0,
+    deathPos: null,
+    killedBy: -1,
+    contact: "none",
+    timeSinceGrounded: 0,
+    jumpBuffer: 0,
+    jumpHeld: false,
+    jumpAge: 0,
+    roundCoins: 0,
+    diamondsThisRound: 0,
+  }));
 }
 
 export function raceIsCountdown(state: GameState): boolean {
@@ -95,8 +106,67 @@ export function tickRace(
     advanceWorldObjects(state, dtMs);
     resolveContacts(state);
   }
+  // VFX always tick so post-death bursts still play out during the brief
+  // window between the last death and the score phase.
+  tickVfx(state, dtMs);
 
   return checkRoundEnd(state);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  VFX                                                                       */
+/* -------------------------------------------------------------------------- */
+
+function tickVfx(state: GameState, dtMs: number): void {
+  const dtSec = dtMs / 1000;
+  for (const f of state.floats) {
+    f.life -= dtMs;
+    f.y += f.vy * dtSec;
+  }
+  state.floats = state.floats.filter((f) => f.life > 0);
+
+  for (const p of state.particles) {
+    p.life -= dtMs;
+    p.vy += PARTICLE_GRAVITY * dtSec;
+    p.x += p.vx * dtSec;
+    p.y += p.vy * dtSec;
+  }
+  state.particles = state.particles.filter((p) => p.life > 0);
+}
+
+/** Spawn a floating score popup at a world position. */
+export function spawnFloat(
+  state: GameState,
+  x: number,
+  y: number,
+  text: string,
+  color: string,
+): void {
+  state.floats.push({
+    x,
+    y,
+    vy: -FLOAT_RISE_SPEED,
+    text,
+    color,
+    life: FLOAT_LIFE_MS,
+    maxLife: FLOAT_LIFE_MS,
+  });
+}
+
+/** Spawn a particle burst at a world position. */
+export function spawnBurst(state: GameState, x: number, y: number, color: string): void {
+  for (let i = 0; i < PARTICLE_BURST_COUNT; i++) {
+    const angle = (Math.PI * 2 * i) / PARTICLE_BURST_COUNT;
+    state.particles.push({
+      x,
+      y,
+      vx: Math.cos(angle) * PARTICLE_SPEED,
+      vy: Math.sin(angle) * PARTICLE_SPEED * 0.7 - PARTICLE_SPEED * 0.3,
+      color,
+      life: PARTICLE_LIFE_MS,
+      maxLife: PARTICLE_LIFE_MS,
+    });
+  }
 }
 
 function advancePhysics(state: GameState, frames: PlayerFrame[], dtMs: number): void {
@@ -190,6 +260,7 @@ function resolveContacts(state: GameState): void {
       if (player) {
         player.score.finishes++;
         player.score.finalScore += SCORE_FINISH;
+        spawnFloat(state, actor.x + PLAYER_W / 2, actor.y, `+${SCORE_FINISH}`, player.color);
       }
     }
   }
@@ -207,10 +278,12 @@ function collectScorer(state: GameState, actor: RaceActor, piece: PlacedPiece): 
     actor.roundCoins++;
     player.score.coinsCollected++;
     player.score.finalScore += SCORE_COIN;
+    spawnFloat(state, actor.x + PLAYER_W / 2, actor.y, `+${SCORE_COIN}`, "#f5d24a");
   } else if (piece.pieceId === "diamond") {
     actor.diamondsThisRound++;
     player.score.diamondsCollected++;
     player.score.finalScore += SCORE_DIAMOND;
+    spawnFloat(state, actor.x + PLAYER_W / 2, actor.y, `+${SCORE_DIAMOND}`, "#67e8f9");
   }
 }
 
@@ -221,7 +294,10 @@ function killActor(state: GameState, actor: RaceActor, killedBySlot: number): vo
   actor.killedBy = killedBySlot;
 
   const dying = state.players.find((p) => p.slot === actor.slot);
-  if (dying) dying.score.deaths++;
+  if (dying) {
+    dying.score.deaths++;
+    spawnBurst(state, actor.x + PLAYER_W / 2, actor.y + PLAYER_H / 2, dying.color);
+  }
 
   if (killedBySlot >= 0) {
     if (killedBySlot === actor.slot) {
@@ -231,6 +307,13 @@ function killActor(state: GameState, actor: RaceActor, killedBySlot: number): vo
       if (killer) {
         killer.score.killsCaused++;
         killer.score.finalScore += SCORE_TRAP_KILL;
+        spawnFloat(
+          state,
+          actor.x + PLAYER_W / 2,
+          actor.y,
+          `+${SCORE_TRAP_KILL} TRAP KILL`,
+          killer.color,
+        );
       }
     }
   }
@@ -286,6 +369,13 @@ export function finalizeRound(state: GameState, outcome: RoundOutcome): RoundLog
     if (player) {
       player.score.loneSurvivor++;
       player.score.finalScore += SCORE_LONE_SURVIVOR;
+      spawnFloat(
+        state,
+        lone.x + PLAYER_W / 2,
+        lone.y - 24,
+        `+${SCORE_LONE_SURVIVOR} LONE SURVIVOR`,
+        player.color,
+      );
     }
     delta.set(lone.slot, (delta.get(lone.slot) ?? 0) + SCORE_LONE_SURVIVOR);
   }

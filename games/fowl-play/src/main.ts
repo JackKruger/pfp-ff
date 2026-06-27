@@ -30,9 +30,11 @@ client.onLaunch((c) => {
 });
 client.onPause(() => {
   paused = true;
+  if (state) state.paused = true;
 });
 client.onResume(() => {
   paused = false;
+  if (state) state.paused = false;
   last = performance.now();
 });
 client.onTerminate(() => {

@@ -1,3 +1,4 @@
+import { URGENCY_THRESHOLD_MS } from "../constants.js";
 import { PIECES } from "../pieces/registry.js";
 import { pieceForCursor } from "../phases/placement.js";
 import { countdownRemainingMs, raceIsCountdown } from "../phases/race.js";
@@ -18,6 +19,7 @@ export function drawHud(
   if (state.phase === "score") drawScoreOverlay(ctx, state, cw, ch);
   if (state.phase === "final") drawFinalOverlay(ctx, state, cw, ch);
   if (state.phase === "intro" && state.showLookAroundHint) drawLookAroundHint(ctx, cw, ch);
+  if (state.paused) drawPauseOverlay(ctx, cw, ch);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -68,8 +70,14 @@ function drawBanner(ctx: CanvasRenderingContext2D, state: GameState, cw: number)
   const w = ctx.measureText(banner).width;
   ctx.fillText(banner, (cw - w) / 2, 88);
 
-  ctx.font = "500 16px system-ui, sans-serif";
-  ctx.fillStyle = "#cbd5e1";
+  // Sub-banner: timer with red urgency under URGENCY_THRESHOLD_MS during the
+  // placement and race phases.
+  const urgent =
+    (state.phase === "placement" || (state.phase === "race" && !raceIsCountdown(state))) &&
+    state.phaseTimer > 0 &&
+    state.phaseTimer <= URGENCY_THRESHOLD_MS;
+  ctx.font = urgent ? "700 18px system-ui, sans-serif" : "500 16px system-ui, sans-serif";
+  ctx.fillStyle = urgent ? "#ef4444" : "#cbd5e1";
   const secs = Math.ceil(state.phaseTimer / 1000);
   const subBanner = subText(state, secs);
   const sw = ctx.measureText(subBanner).width;
@@ -289,6 +297,23 @@ function drawLookAroundHint(ctx: CanvasRenderingContext2D, cw: number, ch: numbe
   ctx.font = "500 13px system-ui, sans-serif";
   ctx.fillStyle = "#cbd5e1";
   for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], px + 16, py + 36 + i * 22);
+}
+
+function drawPauseOverlay(ctx: CanvasRenderingContext2D, cw: number, ch: number): void {
+  ctx.fillStyle = "rgba(2,6,23,0.7)";
+  ctx.fillRect(0, 0, cw, ch);
+  ctx.font = "900 96px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillText("PAUSED", cw / 2 + 3, ch / 2 + 3);
+  ctx.fillStyle = "#e2e8f0";
+  ctx.fillText("PAUSED", cw / 2, ch / 2);
+  ctx.font = "500 16px system-ui, sans-serif";
+  ctx.fillStyle = "#94a3b8";
+  ctx.fillText("Press Start to resume", cw / 2, ch / 2 + 64);
+  ctx.textAlign = "start";
+  ctx.textBaseline = "alphabetic";
 }
 
 // Silence unused-import warning if Player is needed by the type system later.

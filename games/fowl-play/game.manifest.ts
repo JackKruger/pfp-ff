@@ -31,6 +31,29 @@ const manifest = {
     // placement (cursor + piece select) and race (platformer movement).
     mode: "direct",
   },
+  settings: {
+    fields: [
+      {
+        id: "winScore",
+        label: "Score to win",
+        type: "choice",
+        options: [
+          { value: "5", label: "Quick (5 pts)" },
+          { value: "9", label: "Standard (9 pts)" },
+          { value: "15", label: "Marathon (15 pts)" },
+        ],
+        default: "9",
+      },
+      {
+        id: "handSize",
+        label: "Pieces in hand",
+        type: "number",
+        min: 3,
+        max: 7,
+        default: 5,
+      },
+    ],
+  },
   presentation: {
     category: "party",
     accent: "#f59e0b",

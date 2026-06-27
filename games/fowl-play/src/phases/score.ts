@@ -1,4 +1,4 @@
-import { SCORE_MS, WIN_SCORE } from "../constants.js";
+import { SCORE_MS } from "../constants.js";
 import type { GameState, RoundLog } from "../types.js";
 
 /** Start showing the round results banner. */
@@ -15,9 +15,9 @@ export function tickScore(state: GameState, dtMs: number): boolean {
   return state.phaseTimer <= 0;
 }
 
-/** True if anyone has met the win condition. */
+/** True if anyone has met the win condition (state.config.winScore). */
 export function matchIsOver(state: GameState): boolean {
-  return state.players.some((p) => p.score.finalScore >= WIN_SCORE);
+  return state.players.some((p) => p.score.finalScore >= state.config.winScore);
 }
 
 /**

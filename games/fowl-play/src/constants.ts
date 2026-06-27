@@ -57,6 +57,16 @@ export const CAM_ZOOM_MIN = 0.5;
 export const CAM_ZOOM_MAX = 1.0;
 export const CAM_LERP = 0.1;
 
+// Visuals — feedback layer
+export const FLOAT_LIFE_MS = 900;
+export const FLOAT_RISE_SPEED = 60; // px/s upward
+export const PARTICLE_LIFE_MS = 600;
+export const PARTICLE_BURST_COUNT = 8;
+export const PARTICLE_SPEED = 180;
+export const PARTICLE_GRAVITY = 800;
+export const URGENCY_THRESHOLD_MS = 5000;
+export const SPAWN_STAGGER_PX = 28; // horizontal spacing between simultaneous spawns
+
 // Player palette (matches shell PLAYER_COLORS but games may be launched
 // stand-alone with arbitrary colors; we still keep these as the gameplay
 // fallback).

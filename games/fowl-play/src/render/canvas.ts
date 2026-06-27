@@ -1,4 +1,5 @@
 import { LOGICAL_H, LOGICAL_W, PLAYER_H, PLAYER_W } from "../constants.js";
+import { ghostFor, probePlacement } from "../phases/placement.js";
 import { pieceAabb, PIECES } from "../pieces/registry.js";
 import type { GameState, Player } from "../types.js";
 import { type CameraState, lerpCamera, makeCamera, targetFor } from "./camera.js";
@@ -40,8 +41,10 @@ export class Renderer {
 
     this.drawArena(state);
     this.drawPieces(state);
+    this.drawParticles(state);
     this.drawActors(state);
     this.drawCursors(state);
+    this.drawFloats(state);
 
     this.ctx.restore();
 
@@ -103,7 +106,7 @@ export class Renderer {
       if (!actor.alive && actor.deathPos) {
         // Skull glyph (placeholder: filled circle with X).
         this.ctx.fillStyle = color;
-        this.ctx.globalAlpha = 0.6;
+        this.ctx.globalAlpha = 0.4;
         circle(this.ctx, actor.deathPos.x + PLAYER_W / 2, actor.deathPos.y + PLAYER_H / 2, 12);
         this.ctx.globalAlpha = 1;
         continue;
@@ -124,20 +127,79 @@ export class Renderer {
         Math.PI * 2,
       );
       this.ctx.stroke();
+
+      // Nameplate above the player so it's obvious who's who in a 4-player
+      // dogpile. Drawn in world space so the camera zoom scales it.
+      const name = player?.displayName ?? `P${actor.slot + 1}`;
+      this.ctx.font = "600 11px system-ui, sans-serif";
+      this.ctx.textAlign = "center";
+      this.ctx.textBaseline = "bottom";
+      this.ctx.fillStyle = "rgba(0,0,0,0.6)";
+      this.ctx.fillText(name, actor.x + PLAYER_W / 2 + 1, actor.y - 4 + 1);
+      this.ctx.fillStyle = color;
+      this.ctx.fillText(name, actor.x + PLAYER_W / 2, actor.y - 4);
+      this.ctx.textAlign = "start";
+      this.ctx.textBaseline = "alphabetic";
     }
   }
 
   private drawCursors(state: GameState): void {
     if (state.phase !== "placement") return;
     for (const cursor of state.cursors) {
+      if (cursor.confirmed) continue;
       const player = state.players.find((p) => p.slot === cursor.slot);
       const color = player?.color ?? "#ffffff";
+
+      // Ghost piece preview at the snapped position, tinted by validity.
+      const ghost = ghostFor(cursor);
+      const probe = probePlacement(state, cursor);
+      const ghostAabb = pieceAabb(ghost);
+      this.ctx.save();
+      this.ctx.globalAlpha = 0.45;
+      this.ctx.fillStyle = probe.ok ? color : "#ef4444";
+      this.ctx.fillRect(ghostAabb.x, ghostAabb.y, ghostAabb.w, ghostAabb.h);
+      this.ctx.globalAlpha = 0.95;
+      this.ctx.strokeStyle = probe.ok ? color : "#ef4444";
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(ghostAabb.x, ghostAabb.y, ghostAabb.w, ghostAabb.h);
+      this.ctx.restore();
+
+      // Cursor reticle on top so the player can find their cursor easily.
       this.ctx.strokeStyle = color;
       this.ctx.lineWidth = 2;
       this.ctx.beginPath();
       this.ctx.arc(cursor.x, cursor.y, 8, 0, Math.PI * 2);
       this.ctx.stroke();
     }
+  }
+
+  private drawFloats(state: GameState): void {
+    if (!state.floats.length) return;
+    this.ctx.font = "700 16px system-ui, sans-serif";
+    this.ctx.textAlign = "center";
+    this.ctx.textBaseline = "bottom";
+    for (const f of state.floats) {
+      const alpha = Math.max(0, f.life / f.maxLife);
+      this.ctx.globalAlpha = alpha;
+      this.ctx.fillStyle = "rgba(0,0,0,0.7)";
+      this.ctx.fillText(f.text, f.x + 1, f.y + 1);
+      this.ctx.fillStyle = f.color;
+      this.ctx.fillText(f.text, f.x, f.y);
+    }
+    this.ctx.globalAlpha = 1;
+    this.ctx.textAlign = "start";
+    this.ctx.textBaseline = "alphabetic";
+  }
+
+  private drawParticles(state: GameState): void {
+    if (!state.particles.length) return;
+    for (const p of state.particles) {
+      const alpha = Math.max(0, p.life / p.maxLife);
+      this.ctx.globalAlpha = alpha;
+      this.ctx.fillStyle = p.color;
+      this.ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
+    }
+    this.ctx.globalAlpha = 1;
   }
 }
 
