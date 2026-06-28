@@ -47,7 +47,7 @@ function makeState(players: Player[] = []): GameState {
     goalPulses: [],
     soundEvents: [],
     paused: false,
-    config: { winScore: 9, handSize: 5 },
+    config: { winScore: 9, handSize: 5, arenaPool: "all" },
     lastRound: null,
     history: [],
     nextUid: 1,

@@ -46,4 +46,5 @@ export const WINDMILL: Arena = {
       periodMs: 3600,
     },
   ],
+  bg: { top: "#7dd3fc", bottom: "#0f172a" },
 };

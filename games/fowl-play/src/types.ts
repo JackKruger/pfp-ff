@@ -116,10 +116,15 @@ export interface Arena {
   goal: Aabb;
   /** Static, non-removable arena solids. */
   solids: Aabb[];
+  /** Drop-through platforms: collide as solid only when the actor is falling
+   *  and not already overlapping. Players can jump up through them. */
+  oneWaySolids?: Aabb[];
   scorers: ArenaScorer[];
   noGoZones: { x: number; y: number; r: number }[];
   /** Environment hazards owned by the arena (e.g. the Windmill's blade). */
   dynamics?: ArenaDynamic[];
+  /** Optional background palette hint for the renderer. */
+  bg?: { top: string; bottom: string };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -178,6 +183,7 @@ export type Phase = "intro" | "placement" | "race" | "score" | "final";
 export interface GameConfig {
   winScore: number;
   handSize: number;
+  arenaPool: "all" | "random";
 }
 
 /** Per-player live racing state (only meaningful during race phase). */
@@ -196,6 +202,8 @@ export interface RaceActor {
   diedAt: number;
   /** Where they died, for the skull glyph. */
   deathPos: Vec2 | null;
+  /** Recent positions for the motion trail (optional cosmetic). */
+  trail?: Vec2[];
   /** Slot of the player whose placed piece killed them, or -1. */
   killedBy: number;
   /** What killed this actor, or null if still alive. */

@@ -34,4 +34,5 @@ export const BARNYARD: Arena = {
     { x: 64, y: 560, r: 64 },
     { x: 1848, y: 568, r: 64 },
   ],
+  bg: { top: "#fde68a", bottom: "#92400e" },
 };

@@ -27,7 +27,7 @@ export function buildTestState(overrides: Partial<GameState> = {}): GameState {
     goalPulses: [],
     soundEvents: [],
     paused: false,
-    config: { winScore: WIN_SCORE, handSize: HAND_SIZE },
+    config: { winScore: WIN_SCORE, handSize: HAND_SIZE, arenaPool: "all" },
     lastRound: null,
     history: [],
     nextUid: 1,

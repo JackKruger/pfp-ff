@@ -35,4 +35,5 @@ export const SILO: Arena = {
     { x: 360, y: 1320, r: 64 },
     { x: 368, y: 112, r: 64 },
   ],
+  bg: { top: "#1e293b", bottom: "#0c1322" },
 };

@@ -49,6 +49,7 @@ export function stepActor(
   solids: Aabb[],
   pieces: PlacedPiece[],
   dtMs: number,
+  oneWaySolids: Aabb[] = [],
 ): MoveResult {
   if (!actor.alive || actor.finished) {
     return {
@@ -142,6 +143,14 @@ export function stepActor(
     if (!def.solid) continue;
     const mul = def.id === "ice" ? 200 / GROUND_FRICTION : 1;
     allSolids.push({ aabb: pieceAabb(p), frictionMul: mul });
+  }
+  // One-way platforms become "solid" only when the actor is falling onto them
+  // from above. Pressing down while standing on one drops through (handled
+  // implicitly by setting it non-solid when actor.vy < ~0 so jumps clear it).
+  for (const ow of oneWaySolids) {
+    const movingDown = actor.vy >= 0;
+    const above = actor.y + PLAYER_H <= ow.y + 2;
+    if (movingDown && above) allSolids.push({ aabb: ow, frictionMul: 1 });
   }
 
   const result = resolveMove(bounds, dx, dy, allSolids);

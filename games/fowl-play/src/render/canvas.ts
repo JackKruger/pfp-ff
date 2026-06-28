@@ -57,6 +57,20 @@ export class Renderer {
   private drawArena(state: GameState): void {
     const { arena } = state;
 
+    // Background gradient from the arena's palette hint, if any.
+    if (arena.bg) {
+      const g = this.ctx.createLinearGradient(
+        0,
+        arena.bounds.y,
+        0,
+        arena.bounds.y + arena.bounds.h,
+      );
+      g.addColorStop(0, arena.bg.top);
+      g.addColorStop(1, arena.bg.bottom);
+      this.ctx.fillStyle = g;
+      this.ctx.fillRect(arena.bounds.x, arena.bounds.y, arena.bounds.w, arena.bounds.h);
+    }
+
     // Arena bounds outline (helps the eye locate edges in programmer-art).
     this.ctx.strokeStyle = "#1a2030";
     this.ctx.lineWidth = 4;
@@ -65,6 +79,22 @@ export class Renderer {
     // Solids
     this.ctx.fillStyle = "#2a3b56";
     for (const s of arena.solids) this.ctx.fillRect(s.x, s.y, s.w, s.h);
+
+    // One-way drop-through platforms — striped to look clearly different.
+    if (arena.oneWaySolids) {
+      for (const o of arena.oneWaySolids) {
+        this.ctx.fillStyle = "#475569";
+        this.ctx.fillRect(o.x, o.y, o.w, o.h);
+        this.ctx.strokeStyle = "#94a3b8";
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        for (let x = o.x + 6; x < o.x + o.w; x += 8) {
+          this.ctx.moveTo(x, o.y);
+          this.ctx.lineTo(x + 4, o.y + o.h);
+        }
+        this.ctx.stroke();
+      }
+    }
 
     // Start zone
     this.ctx.fillStyle = "rgba(34,197,94,0.18)";
@@ -88,9 +118,35 @@ export class Renderer {
   }
 
   private drawPieces(state: GameState): void {
+    const now = Date.now();
+    const inRace = state.phase === "race";
+    const elapsed = inRace ? raceElapsedMs(state) : 0;
+
     for (const p of state.pieces) {
       const def = PIECES[p.pieceId];
       const aabb = pieceAabb(p);
+
+      // Scorer shimmer — soft alpha pulse so coins read as alive.
+      if (p.pieceId === "coin" || p.pieceId === "diamond") {
+        const phase = (now / 250 + p.uid * 0.7) % (Math.PI * 2);
+        const pulse = 0.65 + 0.35 * Math.sin(phase);
+        this.ctx.globalAlpha = pulse;
+        this.ctx.fillStyle = colorForPiece(p.pieceId);
+        this.ctx.beginPath();
+        const r = aabb.w / 2;
+        this.ctx.arc(aabb.x + r, aabb.y + r, r, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.globalAlpha = 1;
+        continue;
+      }
+
+      // Saw — render as a rotating gear-disc for legibility.
+      if (p.pieceId === "saw") {
+        const angle = (elapsed / 600 + p.uid * 0.3) * Math.PI * 2;
+        this.drawSaw(aabb, angle);
+        continue;
+      }
+
       this.ctx.fillStyle = colorForPiece(p.pieceId);
       this.ctx.fillRect(aabb.x, aabb.y, aabb.w, aabb.h);
       if (def.lethal) {
@@ -101,10 +157,53 @@ export class Renderer {
     }
   }
 
+  private drawSaw(aabb: { x: number; y: number; w: number; h: number }, angle: number): void {
+    const cx = aabb.x + aabb.w / 2;
+    const cy = aabb.y + aabb.h / 2;
+    const rOuter = aabb.w / 2;
+    const rInner = rOuter * 0.55;
+    const teeth = 8;
+    this.ctx.save();
+    this.ctx.translate(cx, cy);
+    this.ctx.rotate(angle);
+    this.ctx.fillStyle = "#dc2626";
+    this.ctx.beginPath();
+    for (let i = 0; i < teeth * 2; i++) {
+      const r = i % 2 === 0 ? rOuter : rInner;
+      const a = (i * Math.PI) / teeth;
+      const x = Math.cos(a) * r;
+      const y = Math.sin(a) * r;
+      if (i === 0) this.ctx.moveTo(x, y);
+      else this.ctx.lineTo(x, y);
+    }
+    this.ctx.closePath();
+    this.ctx.fill();
+    // Hub
+    this.ctx.fillStyle = "#1f2937";
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, rOuter * 0.25, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.restore();
+  }
+
   private drawActors(state: GameState): void {
     for (const actor of state.actors) {
       const player = state.players.find((p) => p.slot === actor.slot);
       const color = player?.color ?? "#cccccc";
+
+      // Motion trail — last N positions, oldest faintest.
+      if (actor.alive && !actor.finished && actor.trail?.length) {
+        const len = actor.trail.length;
+        for (let i = 0; i < len; i++) {
+          const alpha = ((i + 1) / (len + 1)) * 0.35;
+          this.ctx.globalAlpha = alpha;
+          this.ctx.fillStyle = color;
+          this.ctx.beginPath();
+          this.ctx.arc(actor.trail[i].x, actor.trail[i].y, 3 + (i / len) * 2, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+        this.ctx.globalAlpha = 1;
+      }
 
       if (!actor.alive && actor.deathPos) {
         // Skull glyph (placeholder: filled circle with X).

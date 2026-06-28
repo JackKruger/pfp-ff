@@ -125,7 +125,7 @@ export function tickMovers(state: GameState, dtMs: number): void {
     rt.t += dtMs;
     switch (piece.pieceId) {
       case "crusher":
-        tickCrusher(piece, rt, dtMs);
+        tickCrusher(piece, rt, dtMs, state);
         break;
       case "mace":
       case "pendulum":
@@ -144,10 +144,16 @@ export function tickMovers(state: GameState, dtMs: number): void {
   }
 }
 
-function tickCrusher(piece: PlacedPiece, rt: RuntimePiece, _dtMs: number): void {
+function tickCrusher(
+  piece: PlacedPiece,
+  rt: RuntimePiece,
+  _dtMs: number,
+  state: GameState,
+): void {
   // State machine: rest → drop → hold → return → rest.
   const cycleLen = CRUSHER_REST_MS + CRUSHER_DROP_MS + CRUSHER_HOLD_MS + CRUSHER_RETURN_MS;
   const cycle = rt.t % cycleLen;
+  const prev = rt.state;
 
   if (cycle < CRUSHER_REST_MS) {
     rt.state = "rest";
@@ -164,6 +170,27 @@ function tickCrusher(piece: PlacedPiece, rt: RuntimePiece, _dtMs: number): void 
     const phase =
       (cycle - CRUSHER_REST_MS - CRUSHER_DROP_MS - CRUSHER_HOLD_MS) / CRUSHER_RETURN_MS;
     piece.y = rt.origY + CRUSHER_DROP_DIST * (1 - phase);
+  }
+
+  // Impact dust on the first frame of the "down" state.
+  if (prev === "dropping" && rt.state === "down") emitCrusherDust(piece, state);
+}
+
+function emitCrusherDust(piece: PlacedPiece, state: GameState): void {
+  const def = PIECES[piece.pieceId];
+  const cx = piece.x + def.w / 2;
+  const baseY = piece.y + def.h;
+  for (let i = 0; i < 8; i++) {
+    const angle = -Math.PI + (Math.PI / 7) * i;
+    state.particles.push({
+      x: cx,
+      y: baseY,
+      vx: Math.cos(angle) * 240,
+      vy: Math.sin(angle) * 60 - 120,
+      color: "#cbd5e1",
+      life: 380,
+      maxLife: 380,
+    });
   }
 }
 

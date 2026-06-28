@@ -52,6 +52,16 @@ const manifest = {
         max: 7,
         default: 5,
       },
+      {
+        id: "arenaPool",
+        label: "Arena pool",
+        type: "choice",
+        options: [
+          { value: "all", label: "Cycle all arenas" },
+          { value: "random", label: "Random each round" },
+        ],
+        default: "all",
+      },
     ],
   },
   presentation: {

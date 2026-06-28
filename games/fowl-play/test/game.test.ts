@@ -170,10 +170,10 @@ describe("advance FSM", () => {
 
 describe("pickArena", () => {
   it("rotates through ARENAS in round order", () => {
-    expect(pickArena(1).id).toBe(ARENAS[0].id);
-    expect(pickArena(2).id).toBe(ARENAS[1].id);
-    expect(pickArena(3).id).toBe(ARENAS[2].id);
-    // Wraps around.
-    expect(pickArena(4).id).toBe(ARENAS[0].id);
+    for (let i = 0; i < ARENAS.length; i++) {
+      expect(pickArena(i + 1).id).toBe(ARENAS[i].id);
+    }
+    // Wraps around at the end of the catalog.
+    expect(pickArena(ARENAS.length + 1).id).toBe(ARENAS[0].id);
   });
 });

@@ -79,6 +79,7 @@ export function beginRace(state: GameState): void {
     jumpAge: 0,
     roundCoins: 0,
     diamondsThisRound: 0,
+    trail: [],
   }));
 }
 
@@ -116,6 +117,7 @@ export function tickRace(
     advanceWorldObjects(state, dtMs);
     tickArenaDynamics(state, dtMs);
     resolveContacts(state);
+    sampleTrails(state);
   }
   // VFX always tick so post-death bursts still play out during the brief
   // window between the last death and the score phase.
@@ -127,6 +129,17 @@ export function tickRace(
 /* -------------------------------------------------------------------------- */
 /*  VFX                                                                       */
 /* -------------------------------------------------------------------------- */
+
+const TRAIL_MAX = 10;
+
+function sampleTrails(state: GameState): void {
+  for (const actor of state.actors) {
+    if (!actor.alive || actor.finished) continue;
+    actor.trail = actor.trail ?? [];
+    actor.trail.push({ x: actor.x + PLAYER_W / 2, y: actor.y + PLAYER_H / 2 });
+    if (actor.trail.length > TRAIL_MAX) actor.trail.shift();
+  }
+}
 
 function tickVfx(state: GameState, dtMs: number): void {
   const dtSec = dtMs / 1000;
@@ -295,7 +308,14 @@ function advancePhysics(state: GameState, frames: PlayerFrame[], dtMs: number): 
       if (!actor.alive || actor.finished) continue;
       const frame = frames.find((f) => f.slot === actor.slot);
       if (!frame) continue;
-      stepActor(actor, frame, state.arena.solids, state.pieces, step);
+      stepActor(
+        actor,
+        frame,
+        state.arena.solids,
+        state.pieces,
+        step,
+        state.arena.oneWaySolids ?? [],
+      );
     }
     remaining -= step;
     steps++;

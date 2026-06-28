@@ -6,7 +6,7 @@ import {
   RACE_COUNTDOWN_MS,
   WIN_SCORE,
 } from "./constants.js";
-import { pickArena } from "./arenas/index.js";
+import { pickArena, type ArenaPool } from "./arenas/index.js";
 import { beginPlacement, tickPlacement } from "./phases/placement.js";
 import {
   beginRace,
@@ -29,8 +29,8 @@ import { makePlaced } from "./pieces/registry.js";
 
 export function createGame(launch: LaunchContext): GameState {
   const players = makePlayers(launch);
-  const arena = pickArena(1);
   const config = parseConfig(launch.settings);
+  const arena = pickArena(1, config.arenaPool, hashSeed(launch.sessionId));
 
   const state: GameState = {
     phase: "intro",
@@ -68,10 +68,19 @@ export function createGame(launch: LaunchContext): GameState {
 function parseConfig(settings: Record<string, unknown>): GameConfig {
   const winScore = Number.parseInt(String(settings.winScore ?? WIN_SCORE), 10);
   const handSize = Number.parseInt(String(settings.handSize ?? HAND_SIZE), 10);
+  const pool = String(settings.arenaPool ?? "all") as ArenaPool;
   return {
     winScore: Number.isFinite(winScore) && winScore > 0 ? winScore : WIN_SCORE,
     handSize: Number.isFinite(handSize) && handSize > 0 ? handSize : HAND_SIZE,
+    arenaPool: pool === "random" ? "random" : "all",
   };
+}
+
+/** Stable 32-bit hash of a session id so the random arena order is sticky per match. */
+function hashSeed(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return h;
 }
 
 function seedArenaScorers(state: GameState): void {
@@ -142,7 +151,8 @@ export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): 
       }
       // Next round
       state.round++;
-      state.arena = pickArena(state.round);
+      const prevArenaId = state.arena.id;
+      state.arena = pickArena(state.round, state.config.arenaPool, state.startedAt, prevArenaId);
       state.pieces = [];
       seedArenaScorers(state);
       beginPlacement(state, (Date.now() + state.round) & 0x7fffffff);
