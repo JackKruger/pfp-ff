@@ -19,7 +19,37 @@ export function drawHud(
   if (state.phase === "score") drawScoreOverlay(ctx, state, cw, ch);
   if (state.phase === "final") drawFinalOverlay(ctx, state, cw, ch);
   if (state.phase === "intro" && state.showLookAroundHint) drawLookAroundHint(ctx, cw, ch);
+  drawToasts(ctx, state, cw, ch);
   if (state.paused) drawPauseOverlay(ctx, cw, ch);
+}
+
+function drawToasts(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  cw: number,
+  ch: number,
+): void {
+  if (!state.toasts.length) return;
+  const w = Math.min(560, cw - 32);
+  const lineH = 30;
+  // Stack newest at bottom; older fades upward.
+  const baseY = ch - 96;
+  for (let i = 0; i < state.toasts.length; i++) {
+    const t = state.toasts[i];
+    const alpha = Math.min(1, t.life / 400) * (t.life / t.maxLife > 0.3 ? 1 : t.life / (0.3 * t.maxLife));
+    ctx.globalAlpha = Math.max(0, alpha);
+    const y = baseY - (state.toasts.length - 1 - i) * (lineH + 4);
+    ctx.fillStyle = "rgba(15,23,42,0.85)";
+    ctx.fillRect((cw - w) / 2, y, w, lineH);
+    ctx.fillStyle = t.color;
+    ctx.fillRect((cw - w) / 2, y, 4, lineH);
+    ctx.font = "600 16px system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillText(t.text, (cw - w) / 2 + 16, y + lineH / 2);
+  }
+  ctx.globalAlpha = 1;
+  ctx.textBaseline = "alphabetic";
 }
 
 /* -------------------------------------------------------------------------- */

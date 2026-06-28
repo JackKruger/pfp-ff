@@ -23,6 +23,7 @@ function makeActor(slot = 0): RaceActor {
     diedAt: 0,
     deathPos: null,
     killedBy: -1,
+    killedByCause: null,
     contact: "none",
     timeSinceGrounded: 9999,
     jumpBuffer: 0,

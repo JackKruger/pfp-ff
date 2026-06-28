@@ -89,6 +89,24 @@ export interface ArenaScorer {
   y: number;
 }
 
+/**
+ * Environment hazard a specific arena owns — they aren't player-placeable and
+ * aren't part of the piece registry. Currently the only kind is the windmill's
+ * rotating blade.
+ */
+export type ArenaDynamic = {
+  kind: "blade";
+  /** Pivot point in world coordinates. */
+  pivotX: number;
+  pivotY: number;
+  /** Length of the rotating arm. */
+  length: number;
+  /** Width of the lethal segment perpendicular to the arm. */
+  thickness: number;
+  /** Rotation period in ms (positive = clockwise). */
+  periodMs: number;
+};
+
 export interface Arena {
   id: string;
   name: string;
@@ -100,6 +118,8 @@ export interface Arena {
   solids: Aabb[];
   scorers: ArenaScorer[];
   noGoZones: { x: number; y: number; r: number }[];
+  /** Environment hazards owned by the arena (e.g. the Windmill's blade). */
+  dynamics?: ArenaDynamic[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -178,6 +198,8 @@ export interface RaceActor {
   deathPos: Vec2 | null;
   /** Slot of the player whose placed piece killed them, or -1. */
   killedBy: number;
+  /** What killed this actor, or null if still alive. */
+  killedByCause: DeathCause | null;
   /** Last surface they were on: ground/leftWall/rightWall/none. Drives wall-jump. */
   contact: "ground" | "leftWall" | "rightWall" | "none";
   /** ms since last grounded for coyote-time. */
@@ -244,6 +266,37 @@ export interface Particle {
   maxLife: number;
 }
 
+/** Short screen-space message — "P1 was minced by SAW", etc. */
+export interface Toast {
+  text: string;
+  color: string;
+  life: number;
+  maxLife: number;
+}
+
+/** Expanding ring at the goal when a player finishes. */
+export interface GoalPulse {
+  color: string;
+  life: number;
+  maxLife: number;
+}
+
+/** Cause of death for the toast layer and stats. */
+export type DeathCause = PieceId | "fall" | "crush" | "blade";
+
+/** Sound events emitted by the FSM each tick; drained by the audio layer. */
+export type SoundEvent =
+  | "jump"
+  | "coin"
+  | "diamond"
+  | "death"
+  | "kill"
+  | "finish"
+  | "loneSurvivor"
+  | "countdownTick"
+  | "go"
+  | "win";
+
 /* -------------------------------------------------------------------------- */
 /*  Mover runtime                                                             */
 /* -------------------------------------------------------------------------- */
@@ -291,6 +344,12 @@ export interface GameState {
   floats: FloatingText[];
   /** Death particles + small VFX bursts, world-space. */
   particles: Particle[];
+  /** Screen-space toasts (announcements that don't belong in a banner). */
+  toasts: Toast[];
+  /** Active goal-pulse rings, awarded per finisher. */
+  goalPulses: GoalPulse[];
+  /** Sound events emitted this tick; drained by the audio layer in main.ts. */
+  soundEvents: SoundEvent[];
   /** True while the shell has paused the game. */
   paused: boolean;
   /** Match-level configuration, optionally overridden by launch.settings. */

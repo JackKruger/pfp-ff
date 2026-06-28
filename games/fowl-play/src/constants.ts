@@ -66,6 +66,8 @@ export const PARTICLE_SPEED = 180;
 export const PARTICLE_GRAVITY = 800;
 export const URGENCY_THRESHOLD_MS = 5000;
 export const SPAWN_STAGGER_PX = 28; // horizontal spacing between simultaneous spawns
+export const TOAST_LIFE_MS = 2400;
+export const GOAL_PULSE_LIFE_MS = 700;
 
 // Player palette (matches shell PLAYER_COLORS but games may be launched
 // stand-alone with arbitrary colors; we still keep these as the gameplay

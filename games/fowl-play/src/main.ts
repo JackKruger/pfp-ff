@@ -1,5 +1,6 @@
 import "./style.css";
 import { createGameClient, type LaunchContext, type PlayerStanding } from "@pfp/sdk";
+import { FowlAudio } from "./audio.js";
 import { advance, createGame } from "./game.js";
 import { InputReader } from "./input/gamepad.js";
 import { Renderer } from "./render/canvas.js";
@@ -8,6 +9,7 @@ import type { GameState } from "./types.js";
 
 const client = createGameClient();
 const input = new InputReader();
+const audio = new FowlAudio();
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -40,8 +42,14 @@ client.onResume(() => {
 client.onTerminate(() => {
   cancelAnimationFrame(raf);
   input.dispose();
+  audio.dispose();
   client.dispose();
 });
+
+// Unlock the audio context the first time any input arrives — browsers gate
+// the WebAudio API on a user gesture.
+window.addEventListener("pointerdown", () => audio.unlock(), { once: true });
+window.addEventListener("keydown", () => audio.unlock(), { once: true });
 
 window.addEventListener("error", (e) => client.reportError(e.message));
 window.addEventListener("unhandledrejection", (e) => client.reportError(String(e.reason)));
@@ -60,6 +68,10 @@ function loop(now: number): void {
   if (!paused) {
     const frames = input.poll();
     const matchOver = advance(state, frames, dt);
+    if (state.soundEvents.length) {
+      audio.playAll(state.soundEvents);
+      state.soundEvents.length = 0;
+    }
     if (matchOver && !reported) {
       reported = true;
       const standings = computeStandings(state);

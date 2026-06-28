@@ -2,6 +2,7 @@ import {
   FIXED_MS,
   FLOAT_LIFE_MS,
   FLOAT_RISE_SPEED,
+  GOAL_PULSE_LIFE_MS,
   MAX_SUBSTEPS,
   PARTICLE_BURST_COUNT,
   PARTICLE_GRAVITY,
@@ -17,6 +18,7 @@ import {
   SCORE_LONE_SURVIVOR,
   SCORE_TRAP_KILL,
   SPAWN_STAGGER_PX,
+  TOAST_LIFE_MS,
 } from "../constants.js";
 import { overlaps } from "../physics/aabb.js";
 import { stepActor } from "../physics/player.js";
@@ -24,6 +26,8 @@ import { initRuntimeFor, pieceIsLethal, tickMovers } from "../pieces/movers.js";
 import { pieceAabb, PIECES } from "../pieces/registry.js";
 import type {
   Aabb,
+  ArenaDynamic,
+  DeathCause,
   GameState,
   PlacedPiece,
   PlayerFrame,
@@ -42,6 +46,11 @@ export function beginRace(state: GameState): void {
   state.runtime = new Map();
   state.floats = [];
   state.particles = [];
+  state.goalPulses = [];
+  // Toasts persist across phases so a death from the last second remains
+  // legible into the score phase, but stale ones from the placement phase
+  // are cleared at race start to avoid contextless noise.
+  state.toasts = [];
   for (const piece of state.pieces) {
     const rt = initRuntimeFor(piece);
     if (rt) state.runtime.set(piece.uid, rt);
@@ -62,6 +71,7 @@ export function beginRace(state: GameState): void {
     diedAt: 0,
     deathPos: null,
     killedBy: -1,
+    killedByCause: null,
     contact: "none",
     timeSinceGrounded: 0,
     jumpBuffer: 0,
@@ -104,6 +114,7 @@ export function tickRace(
   if (!countdown) {
     advancePhysics(state, frames, dtMs);
     advanceWorldObjects(state, dtMs);
+    tickArenaDynamics(state, dtMs);
     resolveContacts(state);
   }
   // VFX always tick so post-death bursts still play out during the brief
@@ -132,6 +143,12 @@ function tickVfx(state: GameState, dtMs: number): void {
     p.y += p.vy * dtSec;
   }
   state.particles = state.particles.filter((p) => p.life > 0);
+
+  for (const t of state.toasts) t.life -= dtMs;
+  state.toasts = state.toasts.filter((t) => t.life > 0);
+
+  for (const r of state.goalPulses) r.life -= dtMs;
+  state.goalPulses = state.goalPulses.filter((r) => r.life > 0);
 }
 
 /** Spawn a floating score popup at a world position. */
@@ -167,6 +184,105 @@ export function spawnBurst(state: GameState, x: number, y: number, color: string
       maxLife: PARTICLE_LIFE_MS,
     });
   }
+}
+
+/** Human-readable death cause for the screen-space toast. */
+function deathLabel(cause: DeathCause): string {
+  switch (cause) {
+    case "fall":
+      return "fell off the map";
+    case "crush":
+      return "got crushed";
+    case "blade":
+      return "was sliced by the WINDMILL";
+    case "spike":
+      return "stepped on SPIKES";
+    case "saw":
+      return "was minced by a SAW";
+    case "crusher":
+      return "got CRUSHED";
+    case "coals":
+      return "burned on the COALS";
+    case "puck":
+      return "was hit by a PUCK";
+    case "mace":
+      return "was clobbered by the MACE";
+    case "log":
+      return "was flattened by a LOG";
+    default:
+      return "died";
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Arena dynamics (environment-driven hazards)                               */
+/* -------------------------------------------------------------------------- */
+
+function tickArenaDynamics(state: GameState, _dtMs: number): void {
+  if (!state.arena.dynamics) return;
+  // Race time elapsed since the GO moment (clamped to 0 during the countdown
+  // so the blade is at its starting angle when the round starts).
+  const raceElapsedMs = Math.max(
+    0,
+    RACE_COUNTDOWN_MS + RACE_MAX_MS - state.phaseTimer - RACE_COUNTDOWN_MS,
+  );
+
+  for (const d of state.arena.dynamics) {
+    if (d.kind === "blade") tickBlade(state, d, raceElapsedMs);
+  }
+}
+
+function tickBlade(state: GameState, d: ArenaDynamic, raceElapsedMs: number): void {
+  if (d.kind !== "blade") return;
+  const angle = ((raceElapsedMs % d.periodMs) / d.periodMs) * Math.PI * 2;
+  const tipX = d.pivotX + Math.cos(angle) * d.length;
+  const tipY = d.pivotY + Math.sin(angle) * d.length;
+
+  const threshold = d.thickness / 2 + PLAYER_W / 2;
+  for (const actor of state.actors) {
+    if (!actor.alive || actor.finished) continue;
+    const cx = actor.x + PLAYER_W / 2;
+    const cy = actor.y + PLAYER_H / 2;
+    if (distToSegment(cx, cy, d.pivotX, d.pivotY, tipX, tipY) < threshold) {
+      killActor(state, actor, -1, "blade");
+    }
+  }
+}
+
+/** Shortest distance from (px, py) to the segment (x1,y1)-(x2,y2). */
+function distToSegment(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+/** Compute the current blade tip world position — exposed for renderer + tests. */
+export function bladeTip(d: ArenaDynamic, raceElapsedMs: number): { x: number; y: number } {
+  if (d.kind !== "blade") return { x: d.pivotX, y: d.pivotY };
+  const angle = ((raceElapsedMs % d.periodMs) / d.periodMs) * Math.PI * 2;
+  return {
+    x: d.pivotX + Math.cos(angle) * d.length,
+    y: d.pivotY + Math.sin(angle) * d.length,
+  };
+}
+
+/** Race time elapsed since the GO moment (0 during countdown). */
+export function raceElapsedMs(state: GameState): number {
+  return Math.max(
+    0,
+    RACE_COUNTDOWN_MS + RACE_MAX_MS - state.phaseTimer - RACE_COUNTDOWN_MS,
+  );
 }
 
 function advancePhysics(state: GameState, frames: PlayerFrame[], dtMs: number): void {
@@ -205,7 +321,7 @@ function resolveContacts(state: GameState): void {
 
     // Kill line
     if (actor.y >= state.arena.killLineY) {
-      killActor(state, actor, -1);
+      killActor(state, actor, -1, "fall");
       continue;
     }
 
@@ -238,12 +354,12 @@ function resolveContacts(state: GameState): void {
         case "spike": {
           // Lethal only from above.
           const fromAbove = actor.vy > 0 && actor.y + PLAYER_H <= aabb.y + 6;
-          if (fromAbove) killActor(state, actor, piece.placedBy);
+          if (fromAbove) killActor(state, actor, piece.placedBy, "spike");
           break;
         }
         default:
           if (def.lethal && pieceIsLethal(piece, state.runtime.get(piece.uid))) {
-            killActor(state, actor, piece.placedBy);
+            killActor(state, actor, piece.placedBy, piece.pieceId);
           }
           break;
       }
@@ -261,6 +377,12 @@ function resolveContacts(state: GameState): void {
         player.score.finishes++;
         player.score.finalScore += SCORE_FINISH;
         spawnFloat(state, actor.x + PLAYER_W / 2, actor.y, `+${SCORE_FINISH}`, player.color);
+        state.goalPulses.push({
+          color: player.color,
+          life: GOAL_PULSE_LIFE_MS,
+          maxLife: GOAL_PULSE_LIFE_MS,
+        });
+        state.soundEvents.push("finish");
       }
     }
   }
@@ -279,25 +401,43 @@ function collectScorer(state: GameState, actor: RaceActor, piece: PlacedPiece): 
     player.score.coinsCollected++;
     player.score.finalScore += SCORE_COIN;
     spawnFloat(state, actor.x + PLAYER_W / 2, actor.y, `+${SCORE_COIN}`, "#f5d24a");
+    state.soundEvents.push("coin");
   } else if (piece.pieceId === "diamond") {
     actor.diamondsThisRound++;
     player.score.diamondsCollected++;
     player.score.finalScore += SCORE_DIAMOND;
     spawnFloat(state, actor.x + PLAYER_W / 2, actor.y, `+${SCORE_DIAMOND}`, "#67e8f9");
+    state.soundEvents.push("diamond");
   }
 }
 
-function killActor(state: GameState, actor: RaceActor, killedBySlot: number): void {
+function killActor(
+  state: GameState,
+  actor: RaceActor,
+  killedBySlot: number,
+  cause: DeathCause,
+): void {
   actor.alive = false;
   actor.diedAt = Date.now();
   actor.deathPos = { x: actor.x, y: actor.y };
   actor.killedBy = killedBySlot;
+  actor.killedByCause = cause;
 
   const dying = state.players.find((p) => p.slot === actor.slot);
+  const name = dying?.displayName ?? `P${actor.slot + 1}`;
   if (dying) {
     dying.score.deaths++;
     spawnBurst(state, actor.x + PLAYER_W / 2, actor.y + PLAYER_H / 2, dying.color);
   }
+
+  // Screen-space toast announcing the cause.
+  state.toasts.push({
+    text: `${name} ${deathLabel(cause)}`,
+    color: dying?.color ?? "#ef4444",
+    life: TOAST_LIFE_MS,
+    maxLife: TOAST_LIFE_MS,
+  });
+  state.soundEvents.push("death");
 
   if (killedBySlot >= 0) {
     if (killedBySlot === actor.slot) {
@@ -314,6 +454,7 @@ function killActor(state: GameState, actor: RaceActor, killedBySlot: number): vo
           `+${SCORE_TRAP_KILL} TRAP KILL`,
           killer.color,
         );
+        state.soundEvents.push("kill");
       }
     }
   }
@@ -376,6 +517,7 @@ export function finalizeRound(state: GameState, outcome: RoundOutcome): RoundLog
         `+${SCORE_LONE_SURVIVOR} LONE SURVIVOR`,
         player.color,
       );
+      state.soundEvents.push("loneSurvivor");
     }
     delta.set(lone.slot, (delta.get(lone.slot) ?? 0) + SCORE_LONE_SURVIVOR);
   }

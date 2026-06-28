@@ -1,5 +1,6 @@
 import { LOGICAL_H, LOGICAL_W, PLAYER_H, PLAYER_W } from "../constants.js";
 import { ghostFor, probePlacement } from "../phases/placement.js";
+import { bladeTip, raceElapsedMs } from "../phases/race.js";
 import { pieceAabb, PIECES } from "../pieces/registry.js";
 import type { GameState, Player } from "../types.js";
 import { type CameraState, lerpCamera, makeCamera, targetFor } from "./camera.js";
@@ -41,6 +42,8 @@ export class Renderer {
 
     this.drawArena(state);
     this.drawPieces(state);
+    this.drawArenaDynamics(state);
+    this.drawGoalPulses(state);
     this.drawParticles(state);
     this.drawActors(state);
     this.drawCursors(state);
@@ -198,6 +201,53 @@ export class Renderer {
       this.ctx.globalAlpha = alpha;
       this.ctx.fillStyle = p.color;
       this.ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
+    }
+    this.ctx.globalAlpha = 1;
+  }
+
+  private drawArenaDynamics(state: GameState): void {
+    const dyns = state.arena.dynamics;
+    if (!dyns?.length) return;
+    const elapsed = raceElapsedMs(state);
+    for (const d of dyns) {
+      if (d.kind !== "blade") continue;
+      const tip = bladeTip(d, elapsed);
+      // Arm
+      this.ctx.strokeStyle = "#7f1d1d";
+      this.ctx.lineWidth = d.thickness;
+      this.ctx.lineCap = "round";
+      this.ctx.beginPath();
+      this.ctx.moveTo(d.pivotX, d.pivotY);
+      this.ctx.lineTo(tip.x, tip.y);
+      this.ctx.stroke();
+      // Pivot bolt
+      this.ctx.fillStyle = "#1f2937";
+      this.ctx.beginPath();
+      this.ctx.arc(d.pivotX, d.pivotY, d.thickness, 0, Math.PI * 2);
+      this.ctx.fill();
+      // Tip marker
+      this.ctx.fillStyle = "#ef4444";
+      this.ctx.beginPath();
+      this.ctx.arc(tip.x, tip.y, d.thickness * 0.7, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+    this.ctx.lineCap = "butt";
+  }
+
+  private drawGoalPulses(state: GameState): void {
+    if (!state.goalPulses.length) return;
+    const g = state.arena.goal;
+    const cx = g.x + g.w / 2;
+    const cy = g.y + g.h / 2;
+    for (const pulse of state.goalPulses) {
+      const t = 1 - pulse.life / pulse.maxLife;
+      const radius = 24 + t * 96;
+      this.ctx.globalAlpha = Math.max(0, 1 - t);
+      this.ctx.strokeStyle = pulse.color;
+      this.ctx.lineWidth = 4;
+      this.ctx.beginPath();
+      this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      this.ctx.stroke();
     }
     this.ctx.globalAlpha = 1;
   }

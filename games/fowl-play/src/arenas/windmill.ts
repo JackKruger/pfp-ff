@@ -34,4 +34,16 @@ export const WINDMILL: Arena = {
     { x: 120, y: 824, r: 64 },
     { x: 1488, y: 248, r: 64 },
   ],
+  dynamics: [
+    {
+      kind: "blade",
+      // Pivot is up near the goal ledge, blade swings down into the platforms
+      // below — risk/reward grab for the coin sitting at (832, 320).
+      pivotX: 1000,
+      pivotY: 240,
+      length: 200,
+      thickness: 16,
+      periodMs: 3600,
+    },
+  ],
 };

@@ -1,9 +1,16 @@
 import type { LaunchContext } from "@pfp/sdk";
-import { FINAL_HOLD_MS, HAND_SIZE, LOOK_AROUND_MS, WIN_SCORE } from "./constants.js";
+import {
+  FINAL_HOLD_MS,
+  HAND_SIZE,
+  LOOK_AROUND_MS,
+  RACE_COUNTDOWN_MS,
+  WIN_SCORE,
+} from "./constants.js";
 import { pickArena } from "./arenas/index.js";
 import { beginPlacement, tickPlacement } from "./phases/placement.js";
 import {
   beginRace,
+  countdownRemainingMs,
   finalizeRound,
   tickRace,
 } from "./phases/race.js";
@@ -37,6 +44,9 @@ export function createGame(launch: LaunchContext): GameState {
     runtime: new Map(),
     floats: [],
     particles: [],
+    toasts: [],
+    goalPulses: [],
+    soundEvents: [],
     paused: false,
     config,
     lastRound: null,
@@ -97,7 +107,23 @@ export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): 
     }
 
     case "race": {
+      // Emit a "countdownTick" event each time the countdown ticks past a
+      // second boundary, plus a "go" event on the last edge. The race phase
+      // owns the timer so the FSM is the right place to detect the edges.
+      const remainingBefore = countdownRemainingMs(state);
       const outcome = tickRace(state, frames, dtMs);
+      const remainingAfter = countdownRemainingMs(state);
+      const beforeSec = Math.ceil(remainingBefore / 1000);
+      const afterSec = Math.ceil(remainingAfter / 1000);
+      if (
+        remainingBefore > 0 &&
+        afterSec < beforeSec &&
+        afterSec >= 1 &&
+        beforeSec <= Math.ceil(RACE_COUNTDOWN_MS / 1000)
+      ) {
+        state.soundEvents.push("countdownTick");
+      }
+      if (remainingBefore > 0 && remainingAfter === 0) state.soundEvents.push("go");
       if (outcome) {
         const log = finalizeRound(state, outcome);
         beginScore(state, log);
@@ -111,6 +137,7 @@ export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): 
       if (matchIsOver(state) && hasClearWinner(state)) {
         state.phase = "final";
         state.phaseTimer = FINAL_HOLD_MS;
+        state.soundEvents.push("win");
         return false;
       }
       // Next round
