@@ -32,7 +32,6 @@ export function buildTestState(overrides: Partial<GameState> = {}): GameState {
     history: [],
     nextUid: 1,
     startedAt: 0,
-    ended: false,
     showLookAroundHint: false,
     ...overrides,
   };

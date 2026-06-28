@@ -370,8 +370,6 @@ export interface GameState {
   nextUid: number;
   /** epoch ms when the match started. */
   startedAt: number;
-  /** Set once gameOver is emitted, to prevent double-emit. */
-  ended: boolean;
   /** Set true on first placement of the match to show the look-around hint. */
   showLookAroundHint: boolean;
 }
@@ -389,7 +387,6 @@ export interface PlayerFrame {
   moveY: number;
   /** Edge-triggered button presses (this frame only). */
   jumpDown: boolean;
-  jumpUp: boolean;
   confirmDown: boolean; // A
   cancelDown: boolean; // B
   nextDown: boolean; // X
@@ -407,7 +404,6 @@ export function makeFrame(slot: number): PlayerFrame {
     moveX: 0,
     moveY: 0,
     jumpDown: false,
-    jumpUp: false,
     confirmDown: false,
     cancelDown: false,
     nextDown: false,

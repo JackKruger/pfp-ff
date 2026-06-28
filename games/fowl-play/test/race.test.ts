@@ -74,7 +74,6 @@ function makeState(players: Player[], pieces: PlacedPiece[] = []): GameState {
     history: [],
     nextUid: 100,
     startedAt: 0,
-    ended: false,
     showLookAroundHint: false,
   };
 }

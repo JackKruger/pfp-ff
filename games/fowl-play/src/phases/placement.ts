@@ -171,7 +171,18 @@ function tryPlace(state: GameState, cursor: PlacementCursor): PlacedPiece | null
 function cancelOwnPlacement(state: GameState, cursor: PlacementCursor): void {
   if (cursor.lastPlacedUid == null) return;
   const idx = state.pieces.findIndex((p) => p.uid === cursor.lastPlacedUid);
-  if (idx >= 0) state.pieces.splice(idx, 1);
+  if (idx >= 0) {
+    const piece = state.pieces[idx];
+    state.pieces.splice(idx, 1);
+    // Refund the placement stats so trapsPlaced/piecesByType stay honest.
+    const player = state.players.find((p) => p.slot === cursor.slot);
+    if (player) {
+      player.score.trapsPlaced = Math.max(0, player.score.trapsPlaced - 1);
+      const prev = player.score.piecesByType[piece.pieceId] ?? 0;
+      if (prev <= 1) delete player.score.piecesByType[piece.pieceId];
+      else player.score.piecesByType[piece.pieceId] = prev - 1;
+    }
+  }
   cursor.lastPlacedUid = null;
 }
 
@@ -210,9 +221,7 @@ function rotateCcw(r: Rot): Rot {
   return ((r + 3) & 3) as Rot;
 }
 
-export const _internal = { snap, rotateCw, rotateCcw, ghostFor };
-
-// Re-export for tests / debug surfaces.
+/** Returns the piece currently selected by the cursor. */
 export function pieceForCursor(cursor: PlacementCursor): PieceId {
   return cursor.hand[cursor.handIdx];
 }

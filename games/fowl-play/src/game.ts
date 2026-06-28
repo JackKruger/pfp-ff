@@ -53,7 +53,6 @@ export function createGame(launch: LaunchContext): GameState {
     history: [],
     nextUid: 1,
     startedAt: Date.now(),
-    ended: false,
     showLookAroundHint: true,
   };
 
@@ -167,8 +166,8 @@ export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): 
 }
 
 /**
- * Only end the match if there's a non-tie winner above WIN_SCORE — so a
- * tied-at-9 outcome plays one more round. (See design §5.)
+ * Only end the match if there's a non-tie winner at or above the configured
+ * winScore — so a tie at the threshold plays one more round. (See design §5.)
  */
 function hasClearWinner(state: GameState): boolean {
   const standings = computeStandings(state);
@@ -177,5 +176,5 @@ function hasClearWinner(state: GameState): boolean {
   const tiedAtTop = standings.filter((s) => s.rank === top.rank).length;
   if (tiedAtTop > 1) return false;
   const winner = state.players.find((p) => p.slot === top.slot);
-  return !!winner && winner.score.finalScore >= WIN_SCORE;
+  return !!winner && winner.score.finalScore >= state.config.winScore;
 }

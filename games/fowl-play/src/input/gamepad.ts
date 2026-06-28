@@ -19,7 +19,6 @@ interface SlotTracker {
   prevLB: boolean;
   prevRB: boolean;
   prevStart: boolean;
-  prevDPadUp: boolean;
 }
 
 export class InputReader {
@@ -49,7 +48,6 @@ export class InputReader {
       prevLB: false,
       prevRB: false,
       prevStart: false,
-      prevDPadUp: false,
     });
   }
 
@@ -90,7 +88,6 @@ export class InputReader {
 
         f.jumpHeld = a;
         f.jumpDown = a && !t.prevA;
-        f.jumpUp = !a && t.prevA;
         f.confirmDown = a && !t.prevA;
         f.cancelDown = b && !t.prevB;
         f.nextDown = x && !t.prevX;
@@ -106,7 +103,6 @@ export class InputReader {
         t.prevLB = lb;
         t.prevRB = rb;
         t.prevStart = start;
-        t.prevDPadUp = dpUp;
       }
 
       // Keyboard fallback for slot 0 only — used for standalone dev.

@@ -26,7 +26,6 @@ function makeBaseState(): GameState {
     history: [],
     nextUid: 1,
     startedAt: 0,
-    ended: false,
     showLookAroundHint: false,
   };
 }

@@ -2,7 +2,7 @@ import { LOGICAL_H, LOGICAL_W, PLAYER_H, PLAYER_W } from "../constants.js";
 import { ghostFor, probePlacement } from "../phases/placement.js";
 import { bladeTip, raceElapsedMs } from "../phases/race.js";
 import { pieceAabb, PIECES } from "../pieces/registry.js";
-import type { GameState, Player } from "../types.js";
+import type { GameState } from "../types.js";
 import { type CameraState, lerpCamera, makeCamera, targetFor } from "./camera.js";
 import { drawHud } from "./hud.js";
 
@@ -373,7 +373,3 @@ function circle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number):
   ctx.fill();
 }
 
-// Unused helpers to silence "unused" warnings on partial implementations.
-export const _logicalSize = { w: LOGICAL_W, h: LOGICAL_H };
-export const _playerSize = { w: PLAYER_W, h: PLAYER_H };
-export type _Player = Player;

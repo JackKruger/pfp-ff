@@ -4,7 +4,6 @@ import type {
   Aabb,
   GameState,
   PlacedPiece,
-  RaceActor,
   RuntimePiece,
 } from "../types.js";
 
@@ -354,6 +353,3 @@ export const _crusher = {
 };
 export const _mace = { PERIOD: MACE_PERIOD_MS, AMPLITUDE: MACE_AMPLITUDE, CHAIN: MACE_CHAIN };
 export const _log = { DELAY: LOG_DELAY_MS };
-
-// Silence unused-actor warning when fan-tick handles every actor.
-export type _ActorAlias = RaceActor;

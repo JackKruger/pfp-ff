@@ -95,10 +95,6 @@ export function countdownRemainingMs(state: GameState): number {
   return Math.max(0, state.phaseTimer - RACE_MAX_MS);
 }
 
-export function raceTimeLeftMs(state: GameState): number {
-  return Math.max(0, state.phaseTimer - 0);
-}
-
 /* -------------------------------------------------------------------------- */
 /*  Tick                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -116,7 +112,7 @@ export function tickRace(
     advancePhysics(state, frames, dtMs);
     advanceWorldObjects(state, dtMs);
     tickArenaDynamics(state, dtMs);
-    resolveContacts(state);
+    resolveContacts(state, dtMs);
     sampleTrails(state);
   }
   // VFX always tick so post-death bursts still play out during the brief
@@ -235,13 +231,9 @@ function tickArenaDynamics(state: GameState, _dtMs: number): void {
   if (!state.arena.dynamics) return;
   // Race time elapsed since the GO moment (clamped to 0 during the countdown
   // so the blade is at its starting angle when the round starts).
-  const raceElapsedMs = Math.max(
-    0,
-    RACE_COUNTDOWN_MS + RACE_MAX_MS - state.phaseTimer - RACE_COUNTDOWN_MS,
-  );
-
+  const elapsed = raceElapsedMs(state);
   for (const d of state.arena.dynamics) {
-    if (d.kind === "blade") tickBlade(state, d, raceElapsedMs);
+    if (d.kind === "blade") tickBlade(state, d, elapsed);
   }
 }
 
@@ -334,7 +326,8 @@ function advanceWorldObjects(state: GameState, dtMs: number): void {
 /*  Contact resolution                                                        */
 /* -------------------------------------------------------------------------- */
 
-function resolveContacts(state: GameState): void {
+function resolveContacts(state: GameState, dtMs: number): void {
+  const dtSec = dtMs / 1000;
   for (const actor of state.actors) {
     if (!actor.alive || actor.finished) continue;
     const bounds: Aabb = { x: actor.x, y: actor.y, w: PLAYER_W, h: PLAYER_H };
@@ -363,11 +356,12 @@ function resolveContacts(state: GameState): void {
           if (actor.vy >= 0) actor.vy = -600;
           break;
         case "conveyor": {
-          // Standing on top: nudge horizontally. Direction is rot-dependent.
+          // Standing on top: accelerate horizontally. Direction is rot-dependent.
+          // Scaled by frame dt so the push is consistent across frame rates.
           const onTop = actor.y + PLAYER_H <= aabb.y + 2;
           if (onTop) {
             const dir = piece.rot === 2 ? -1 : 1;
-            actor.vx += dir * 200 * 0.016; // small per-frame push
+            actor.vx += dir * 200 * dtSec;
           }
           break;
         }

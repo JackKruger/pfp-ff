@@ -52,7 +52,6 @@ function makeState(players: Player[] = []): GameState {
     history: [],
     nextUid: 1,
     startedAt: 0,
-    ended: false,
     showLookAroundHint: false,
   };
 }
@@ -262,6 +261,28 @@ describe("tickPlacement", () => {
     expect(state.pieces.length).toBe(0);
     expect(c.confirmed).toBe(false);
     expect(c.lastPlacedUid).toBeNull();
+  });
+
+  // Regression: cancelOwnPlacement used to leave trapsPlaced / piecesByType
+  // inflated, so place→cancel→place→cancel showed trapsPlaced=4 with zero
+  // pieces in the world.
+  it("cancel refunds trapsPlaced and piecesByType", () => {
+    const players = [makePlayer(0)];
+    const state = makeState(players);
+    beginPlacement(state, 1);
+    const c = state.cursors[0];
+    c.hand = ["plank"];
+    c.handIdx = 0;
+    c.x = 800;
+    c.y = 300;
+
+    for (let round = 0; round < 3; round++) {
+      tickPlacement(state, [{ ...makeFrame(0), confirmDown: true }], 16);
+      tickPlacement(state, [{ ...makeFrame(0), cancelDown: true }], 16);
+    }
+    expect(state.pieces.length).toBe(0);
+    expect(players[0].score.trapsPlaced).toBe(0);
+    expect(players[0].score.piecesByType.plank).toBeUndefined();
   });
 
   it("Start marks ready without placing", () => {

@@ -3,7 +3,7 @@ import { PIECES } from "../pieces/registry.js";
 import { pieceForCursor } from "../phases/placement.js";
 import { countdownRemainingMs, raceIsCountdown } from "../phases/race.js";
 import { computeStandings } from "../phases/score.js";
-import type { GameState, Player } from "../types.js";
+import type { GameState, RoundOutcome } from "../types.js";
 
 /** Top-overlay HUD: player chips, phase banner, timer, overlays. */
 export function drawHud(
@@ -34,10 +34,11 @@ function drawToasts(
   const lineH = 30;
   // Stack newest at bottom; older fades upward.
   const baseY = ch - 96;
+  // Single fade over the last 600 ms of each toast's lifetime.
+  const FADE_MS = 600;
   for (let i = 0; i < state.toasts.length; i++) {
     const t = state.toasts[i];
-    const alpha = Math.min(1, t.life / 400) * (t.life / t.maxLife > 0.3 ? 1 : t.life / (0.3 * t.maxLife));
-    ctx.globalAlpha = Math.max(0, alpha);
+    ctx.globalAlpha = Math.max(0, Math.min(1, t.life / FADE_MS));
     const y = baseY - (state.toasts.length - 1 - i) * (lineH + 4);
     ctx.fillStyle = "rgba(15,23,42,0.85)";
     ctx.fillRect((cw - w) / 2, y, w, lineH);
@@ -222,7 +223,7 @@ function drawScoreOverlay(
   }
 }
 
-function outcomeLabel(outcome: string): string {
+function outcomeLabel(outcome: RoundOutcome): string {
   switch (outcome) {
     case "all_finished":
       return "All finished";
@@ -230,8 +231,6 @@ function outcomeLabel(outcome: string): string {
       return "No survivors";
     case "timeout":
       return "Time's up";
-    default:
-      return "Round over";
   }
 }
 
@@ -346,5 +345,3 @@ function drawPauseOverlay(ctx: CanvasRenderingContext2D, cw: number, ch: number)
   ctx.textBaseline = "alphabetic";
 }
 
-// Silence unused-import warning if Player is needed by the type system later.
-export type _Player = Player;
