@@ -117,6 +117,8 @@ function drawBanner(ctx: CanvasRenderingContext2D, state: GameState, cw: number)
 
 function bannerText(state: GameState): string {
   switch (state.phase) {
+    case "levelSelect":
+      return "Choose your arena";
     case "intro":
       return "Get ready…";
     case "placement":

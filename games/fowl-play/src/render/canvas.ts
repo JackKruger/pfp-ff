@@ -2,7 +2,9 @@ import { LOGICAL_H, LOGICAL_W, PLAYER_H, PLAYER_W } from "../constants.js";
 import { ghostFor, probePlacement } from "../phases/placement.js";
 import { bladeTip, raceElapsedMs } from "../phases/race.js";
 import { pieceAabb, PIECES } from "../pieces/registry.js";
+import { ARENAS } from "../arenas/index.js";
 import type { GameState } from "../types.js";
+import { arenaBg, IMG, pieceImage, ready, tinted } from "./assets.js";
 import { type CameraState, lerpCamera, makeCamera, targetFor } from "./camera.js";
 import { drawHud } from "./hud.js";
 
@@ -29,6 +31,12 @@ export class Renderer {
     this.ctx.fillStyle = "#05060a";
     this.ctx.fillRect(0, 0, cw, ch);
 
+    // Pre-match arena picker is a full-screen menu, not a world view.
+    if (state.phase === "levelSelect") {
+      this.drawLevelSelect(state, cw, ch);
+      return;
+    }
+
     // Camera transform (logical 1280x720 maps to canvas)
     this.camera = lerpCamera(this.camera, targetFor(state));
 
@@ -54,11 +62,83 @@ export class Renderer {
     drawHud(this.ctx, state, cw, ch);
   }
 
+  private drawLevelSelect(state: GameState, cw: number, ch: number): void {
+    const ctx = this.ctx;
+    const idx = state.levelSelectIdx ?? 0;
+    const arena = state.arena;
+    ctx.textAlign = "center";
+
+    // Title
+    ctx.fillStyle = "#f59e0b";
+    ctx.font = "700 34px system-ui, sans-serif";
+    ctx.fillText("CHOOSE YOUR ARENA", cw / 2, ch * 0.16);
+
+    // Preview box — arena art (cover-fit) or palette gradient fallback.
+    const pw = Math.min(cw * 0.6, 720);
+    const ph = pw * 0.5;
+    const px = cw / 2 - pw / 2;
+    const py = ch * 0.26;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(px, py, pw, ph);
+    ctx.clip();
+    const bg = arenaBg(arena.id);
+    if (ready(bg)) {
+      const scale = Math.max(pw / bg.naturalWidth, ph / bg.naturalHeight);
+      const dw = bg.naturalWidth * scale;
+      const dh = bg.naturalHeight * scale;
+      ctx.drawImage(bg, px + (pw - dw) / 2, py + (ph - dh) / 2, dw, dh);
+    } else if (arena.bg) {
+      const g = ctx.createLinearGradient(0, py, 0, py + ph);
+      g.addColorStop(0, arena.bg.top);
+      g.addColorStop(1, arena.bg.bottom);
+      ctx.fillStyle = g;
+      ctx.fillRect(px, py, pw, ph);
+    } else {
+      ctx.fillStyle = "#1a2030";
+      ctx.fillRect(px, py, pw, ph);
+    }
+    ctx.restore();
+    ctx.strokeStyle = "#f59e0b";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(px, py, pw, ph);
+
+    // Arrows + arena name above the preview.
+    ctx.fillStyle = "#e5e7eb";
+    ctx.font = "700 26px system-ui, sans-serif";
+    ctx.fillText(`◄   ${arena.name}   ►`, cw / 2, py - 16);
+
+    // Index dots + counter below the preview.
+    const n = ARENAS.length;
+    const dotY = py + ph + 34;
+    const gap = 22;
+    const startX = cw / 2 - ((n - 1) * gap) / 2;
+    for (let i = 0; i < n; i++) {
+      ctx.beginPath();
+      ctx.arc(startX + i * gap, dotY, 6, 0, Math.PI * 2);
+      ctx.fillStyle = i === idx ? "#f59e0b" : "#3a3f4b";
+      ctx.fill();
+    }
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "600 15px system-ui, sans-serif";
+    ctx.fillText(`${idx + 1}/${n}`, cw / 2, dotY + 26);
+
+    // Hint
+    ctx.fillStyle = "#cbd5e1";
+    ctx.font = "600 16px system-ui, sans-serif";
+    ctx.fillText("Any player:   ◄ ►  cycle   ·   A  start", cw / 2, ch * 0.9);
+
+    ctx.textAlign = "start";
+  }
+
   private drawArena(state: GameState): void {
     const { arena } = state;
 
-    // Background gradient from the arena's palette hint, if any.
-    if (arena.bg) {
+    // Background art if this arena has it; otherwise the palette gradient.
+    const bgImg = arenaBg(arena.id);
+    if (ready(bgImg)) {
+      this.ctx.drawImage(bgImg, arena.bounds.x, arena.bounds.y, arena.bounds.w, arena.bounds.h);
+    } else if (arena.bg) {
       const g = this.ctx.createLinearGradient(
         0,
         arena.bounds.y,
@@ -131,19 +211,31 @@ export class Renderer {
         const phase = (now / 250 + p.uid * 0.7) % (Math.PI * 2);
         const pulse = 0.65 + 0.35 * Math.sin(phase);
         this.ctx.globalAlpha = pulse;
-        this.ctx.fillStyle = colorForPiece(p.pieceId);
-        this.ctx.beginPath();
-        const r = aabb.w / 2;
-        this.ctx.arc(aabb.x + r, aabb.y + r, r, 0, Math.PI * 2);
-        this.ctx.fill();
+        if (p.pieceId === "coin" && ready(IMG.coin)) {
+          this.ctx.drawImage(IMG.coin, aabb.x, aabb.y, aabb.w, aabb.h);
+        } else {
+          this.ctx.fillStyle = colorForPiece(p.pieceId);
+          this.ctx.beginPath();
+          const r = aabb.w / 2;
+          this.ctx.arc(aabb.x + r, aabb.y + r, r, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
         this.ctx.globalAlpha = 1;
         continue;
       }
 
-      // Saw — render as a rotating gear-disc for legibility.
+      // Saw — spin the sprite if we have it, else the procedural gear-disc.
       if (p.pieceId === "saw") {
         const angle = (elapsed / 600 + p.uid * 0.3) * Math.PI * 2;
-        this.drawSaw(aabb, angle);
+        if (ready(IMG.saw)) this.drawRotated(IMG.saw, aabb, def.w, def.h, angle);
+        else this.drawSaw(aabb, angle);
+        continue;
+      }
+
+      // Static sprite (plank/block/spike) rotated to its placement, else a rect.
+      const img = pieceImage(p.pieceId);
+      if (ready(img)) {
+        this.drawRotated(img, aabb, def.w, def.h, (p.rot * Math.PI) / 2);
         continue;
       }
 
@@ -155,6 +247,25 @@ export class Renderer {
         this.ctx.strokeRect(aabb.x, aabb.y, aabb.w, aabb.h);
       }
     }
+  }
+
+  /**
+   * Draw a sprite centered in `aabb`, rotated by `angle`. `w`/`h` are the
+   * sprite's unrotated logical size, so a 90°-placed piece whose AABB has w/h
+   * swapped still draws at the right footprint.
+   */
+  private drawRotated(
+    img: CanvasImageSource,
+    aabb: { x: number; y: number; w: number; h: number },
+    w: number,
+    h: number,
+    angle: number,
+  ): void {
+    this.ctx.save();
+    this.ctx.translate(aabb.x + aabb.w / 2, aabb.y + aabb.h / 2);
+    this.ctx.rotate(angle);
+    this.ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    this.ctx.restore();
   }
 
   private drawSaw(aabb: { x: number; y: number; w: number; h: number }, angle: number): void {
@@ -206,29 +317,45 @@ export class Renderer {
       }
 
       if (!actor.alive && actor.deathPos) {
-        // Skull glyph (placeholder: filled circle with X).
-        this.ctx.fillStyle = color;
-        this.ctx.globalAlpha = 0.4;
-        circle(this.ctx, actor.deathPos.x + PLAYER_W / 2, actor.deathPos.y + PLAYER_H / 2, 12);
+        const cx = actor.deathPos.x + PLAYER_W / 2;
+        const cy = actor.deathPos.y + PLAYER_H / 2;
+        this.ctx.globalAlpha = 0.6;
+        if (ready(IMG.skull)) {
+          const s = 28;
+          this.ctx.drawImage(tinted(IMG.skull, color), cx - s / 2, cy - s / 2, s, s);
+        } else {
+          // Fallback skull glyph: filled circle.
+          this.ctx.fillStyle = color;
+          this.ctx.globalAlpha = 0.4;
+          circle(this.ctx, cx, cy, 12);
+        }
         this.ctx.globalAlpha = 1;
         continue;
       }
       if (!actor.alive) continue;
 
-      // Live player: filled circle with outline.
-      this.ctx.fillStyle = color;
-      circle(this.ctx, actor.x + PLAYER_W / 2, actor.y + PLAYER_H / 2, PLAYER_W / 2 + 2);
-      this.ctx.strokeStyle = actor.finished ? "#ffffff" : "#00000033";
-      this.ctx.lineWidth = 2;
-      this.ctx.beginPath();
-      this.ctx.arc(
-        actor.x + PLAYER_W / 2,
-        actor.y + PLAYER_H / 2,
-        PLAYER_W / 2 + 2,
-        0,
-        Math.PI * 2,
-      );
-      this.ctx.stroke();
+      // Live player: tinted chicken sprite, else a filled circle with outline.
+      const cx = actor.x + PLAYER_W / 2;
+      const cy = actor.y + PLAYER_H / 2;
+      if (ready(IMG.chicken)) {
+        const s = PLAYER_W + 12;
+        this.ctx.drawImage(tinted(IMG.chicken, color), cx - s / 2, cy - s / 2, s, s);
+        if (actor.finished) {
+          this.ctx.strokeStyle = "#ffffff";
+          this.ctx.lineWidth = 2;
+          this.ctx.beginPath();
+          this.ctx.arc(cx, cy, s / 2, 0, Math.PI * 2);
+          this.ctx.stroke();
+        }
+      } else {
+        this.ctx.fillStyle = color;
+        circle(this.ctx, cx, cy, PLAYER_W / 2 + 2);
+        this.ctx.strokeStyle = actor.finished ? "#ffffff" : "#00000033";
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(cx, cy, PLAYER_W / 2 + 2, 0, Math.PI * 2);
+        this.ctx.stroke();
+      }
 
       // Nameplate above the player so it's obvious who's who in a 4-player
       // dogpile. Drawn in world space so the camera zoom scales it.

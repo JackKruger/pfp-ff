@@ -6,7 +6,8 @@ import {
   RACE_COUNTDOWN_MS,
   WIN_SCORE,
 } from "./constants.js";
-import { pickArena, type ArenaPool } from "./arenas/index.js";
+import { ARENAS } from "./arenas/index.js";
+import { beginLevelSelect, tickLevelSelect } from "./phases/levelSelect.js";
 import { beginPlacement, tickPlacement } from "./phases/placement.js";
 import {
   beginRace,
@@ -30,13 +31,12 @@ import { makePlaced } from "./pieces/registry.js";
 export function createGame(launch: LaunchContext): GameState {
   const players = makePlayers(launch);
   const config = parseConfig(launch.settings);
-  const arena = pickArena(1, config.arenaPool, hashSeed(launch.sessionId));
 
   const state: GameState = {
-    phase: "intro",
-    phaseTimer: LOOK_AROUND_MS,
+    phase: "levelSelect",
+    phaseTimer: 0,
     round: 1,
-    arena,
+    arena: ARENAS[0],
     players,
     pieces: [],
     actors: [],
@@ -56,7 +56,8 @@ export function createGame(launch: LaunchContext): GameState {
     showLookAroundHint: true,
   };
 
-  seedArenaScorers(state);
+  // Players pick the arena before round 1; scorers are seeded once they confirm.
+  beginLevelSelect(state);
   return state;
 }
 
@@ -67,19 +68,10 @@ export function createGame(launch: LaunchContext): GameState {
 function parseConfig(settings: Record<string, unknown>): GameConfig {
   const winScore = Number.parseInt(String(settings.winScore ?? WIN_SCORE), 10);
   const handSize = Number.parseInt(String(settings.handSize ?? HAND_SIZE), 10);
-  const pool = String(settings.arenaPool ?? "all") as ArenaPool;
   return {
     winScore: Number.isFinite(winScore) && winScore > 0 ? winScore : WIN_SCORE,
     handSize: Number.isFinite(handSize) && handSize > 0 ? handSize : HAND_SIZE,
-    arenaPool: pool === "random" ? "random" : "all",
   };
-}
-
-/** Stable 32-bit hash of a session id so the random arena order is sticky per match. */
-function hashSeed(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  return h;
 }
 
 function seedArenaScorers(state: GameState): void {
@@ -99,6 +91,18 @@ function seedArenaScorers(state: GameState): void {
  */
 export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): boolean {
   switch (state.phase) {
+    case "levelSelect": {
+      const confirmed = tickLevelSelect(state, frames);
+      if (confirmed) {
+        seedArenaScorers(state);
+        state.phase = "intro";
+        state.phaseTimer = LOOK_AROUND_MS;
+        state.showLookAroundHint = true;
+        state.soundEvents.push("go");
+      }
+      return false;
+    }
+
     case "intro": {
       state.phaseTimer = Math.max(0, state.phaseTimer - dtMs);
       if (state.phaseTimer <= 0) {
@@ -148,11 +152,11 @@ export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): 
         state.soundEvents.push("win");
         return false;
       }
-      // Next round
+      // Next round — UCH-style: stay on the same arena and keep every
+      // player-placed piece so the map gets more chaotic each round. Only the
+      // arena's coins/diamond (placedBy === -1) are cleared and respawned.
       state.round++;
-      const prevArenaId = state.arena.id;
-      state.arena = pickArena(state.round, state.config.arenaPool, state.startedAt, prevArenaId);
-      state.pieces = [];
+      state.pieces = state.pieces.filter((p) => p.placedBy !== -1);
       seedArenaScorers(state);
       beginPlacement(state, (Date.now() + state.round) & 0x7fffffff);
       return false;

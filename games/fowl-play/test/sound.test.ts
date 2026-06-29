@@ -105,7 +105,8 @@ describe("scoring events emit sound events", () => {
 describe("FSM-driven sound events", () => {
   it("emits a 'countdownTick' as the countdown clicks down a second", () => {
     const state = createGame(launch(1));
-    // Skip the intro phase.
+    // Confirm the level, then skip the intro phase.
+    advance(state, pump(state, { confirmDown: true }), 16);
     advance(state, pump(state), LOOK_AROUND_MS + 1);
     // Start the race.
     advance(state, pump(state, { startDown: true }), 16);
@@ -118,6 +119,7 @@ describe("FSM-driven sound events", () => {
 
   it("emits 'go' on the last edge of the countdown", () => {
     const state = createGame(launch(1));
+    advance(state, pump(state, { confirmDown: true }), 16);
     advance(state, pump(state), LOOK_AROUND_MS + 1);
     advance(state, pump(state, { startDown: true }), 16);
     state.soundEvents.length = 0;
@@ -127,6 +129,7 @@ describe("FSM-driven sound events", () => {
 
   it("emits 'win' when score → final fires", () => {
     const state = createGame(launch(2));
+    advance(state, pump(state, { confirmDown: true }), 16);
     advance(state, pump(state), LOOK_AROUND_MS + 1);
     state.players[0].score.finalScore = state.config.winScore;
     state.players[1].score.finalScore = 0;

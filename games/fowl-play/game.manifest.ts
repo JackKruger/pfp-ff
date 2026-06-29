@@ -52,16 +52,6 @@ const manifest = {
         max: 7,
         default: 5,
       },
-      {
-        id: "arenaPool",
-        label: "Arena pool",
-        type: "choice",
-        options: [
-          { value: "all", label: "Cycle all arenas" },
-          { value: "random", label: "Random each round" },
-        ],
-        default: "all",
-      },
     ],
   },
   presentation: {
@@ -69,14 +59,11 @@ const manifest = {
     accent: "#f59e0b",
     icon: "🐔",
     blurb: "Lay your traps, then race your friends. Last chicken running wins.",
-    // In development — surfaced as "Coming Soon" until v1 ships. Flip false
-    // once the game is fully playable and added to BUILT_GAME_IDS.
-    disabled: true,
   },
   build: {
     packageName: "@pfp/fowl-play",
     devPort: 5179,
-    built: false,
+    built: true,
   },
 } satisfies GameManifest;
 

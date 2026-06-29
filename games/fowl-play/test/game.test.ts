@@ -11,6 +11,7 @@ import {
   WIN_SCORE,
 } from "../src/constants.js";
 import { advance, createGame } from "../src/game.js";
+import { makePlaced } from "../src/pieces/registry.js";
 import { makeFrame, type GameState, type PlayerFrame } from "../src/types.js";
 
 function launch(slots = 2): LaunchContext {
@@ -32,17 +33,26 @@ function pump(state: GameState, frame?: Partial<PlayerFrame>): PlayerFrame[] {
   return state.players.map((p) => ({ ...makeFrame(p.slot), ...(frame ?? {}) }));
 }
 
+/** Take a freshly-created game past the pre-match level picker into intro. */
+function confirmLevel(state: GameState): void {
+  advance(state, pump(state, { confirmDown: true }), 16);
+}
+
 describe("createGame", () => {
-  it("starts in the intro phase with the look-around hint", () => {
+  it("starts in the levelSelect phase with the look-around hint pending", () => {
     const state = createGame(launch(2));
-    expect(state.phase).toBe("intro");
-    expect(state.phaseTimer).toBe(LOOK_AROUND_MS);
+    expect(state.phase).toBe("levelSelect");
     expect(state.showLookAroundHint).toBe(true);
     expect(state.round).toBe(1);
+    // Scorers are not seeded until a level is confirmed.
+    expect(state.pieces.length).toBe(0);
   });
 
-  it("seeds arena scorers into state.pieces with placedBy = -1", () => {
+  it("confirming the level → intro, seeding arena scorers with placedBy = -1", () => {
     const state = createGame(launch(2));
+    confirmLevel(state);
+    expect(state.phase).toBe("intro");
+    expect(state.phaseTimer).toBe(LOOK_AROUND_MS);
     expect(state.pieces.length).toBeGreaterThan(0);
     for (const p of state.pieces) {
       expect(p.placedBy).toBe(-1);
@@ -67,8 +77,25 @@ describe("createGame", () => {
 });
 
 describe("advance FSM", () => {
+  it("levelSelect → intro when a player confirms", () => {
+    const state = createGame(launch(2));
+    advance(state, pump(state, { confirmDown: true }), 16);
+    expect(state.phase).toBe("intro");
+    expect(state.phaseTimer).toBe(LOOK_AROUND_MS);
+  });
+
+  it("levelSelect cycles the highlighted arena with left/right", () => {
+    const state = createGame(launch(1));
+    expect(state.levelSelectIdx).toBe(0);
+    advance(state, pump(state, { nextDown: true }), 16);
+    expect(state.levelSelectIdx).toBe(1);
+    expect(state.arena.id).toBe(ARENAS[1].id);
+    expect(state.phase).toBe("levelSelect"); // not confirmed yet
+  });
+
   it("intro → placement after LOOK_AROUND_MS", () => {
     const state = createGame(launch(2));
+    confirmLevel(state);
     advance(state, pump(state), LOOK_AROUND_MS + 1);
     expect(state.phase).toBe("placement");
     expect(state.phaseTimer).toBe(PLACEMENT_MS);
@@ -78,6 +105,7 @@ describe("advance FSM", () => {
 
   it("placement → race when all players ready up", () => {
     const state = createGame(launch(2));
+    confirmLevel(state);
     advance(state, pump(state), LOOK_AROUND_MS + 1);
     advance(state, pump(state, { startDown: true }), 16);
     expect(state.phase).toBe("race");
@@ -87,6 +115,7 @@ describe("advance FSM", () => {
 
   it("placement → race when the timer expires", () => {
     const state = createGame(launch(2));
+    confirmLevel(state);
     advance(state, pump(state), LOOK_AROUND_MS + 1);
     advance(state, pump(state), PLACEMENT_MS + 16);
     expect(state.phase).toBe("race");
@@ -94,6 +123,7 @@ describe("advance FSM", () => {
 
   it("race → score when all actors are gone (all_dead path)", () => {
     const state = createGame(launch(1));
+    confirmLevel(state);
     advance(state, pump(state), LOOK_AROUND_MS + 1);
     advance(state, pump(state, { startDown: true }), 16);
     // Skip countdown.
@@ -106,8 +136,9 @@ describe("advance FSM", () => {
     expect(state.lastRound?.outcome).toBe("all_dead");
   });
 
-  it("score → next round increments round, swaps arena, wipes pieces, redraws hands", () => {
+  it("score → next round keeps the same arena and retains player pieces (UCH chaos)", () => {
     const state = createGame(launch(2));
+    confirmLevel(state);
     advance(state, pump(state), LOOK_AROUND_MS + 1);
     advance(state, pump(state, { startDown: true }), 16);
     advance(state, pump(state), RACE_COUNTDOWN_MS + 1);
@@ -119,17 +150,22 @@ describe("advance FSM", () => {
     expect(state.phase).toBe("score");
 
     const arenaBefore = state.arena.id;
+    // A player-placed piece from this round must survive into the next.
+    state.pieces.push(makePlaced(state.nextUid++, "block", 100, 100, 0, 0));
     advance(state, pump(state), SCORE_MS + 16);
+
     expect(state.round).toBe(2);
     expect(state.phase).toBe("placement");
-    // Pieces have been reset to arena scorers only.
-    for (const p of state.pieces) expect(p.placedBy).toBe(-1);
-    // Arena rotated.
-    expect(state.arena.id).not.toBe(arenaBefore);
+    // Same map for the whole match.
+    expect(state.arena.id).toBe(arenaBefore);
+    // Player piece persists; the arena's scorers are respawned.
+    expect(state.pieces.some((p) => p.placedBy === 0 && p.pieceId === "block")).toBe(true);
+    expect(state.pieces.some((p) => p.placedBy === -1)).toBe(true);
   });
 
   it("score → final when a clear winner has WIN_SCORE", () => {
     const state = createGame(launch(2));
+    confirmLevel(state);
     advance(state, pump(state), LOOK_AROUND_MS + 1);
     state.players[0].score.finalScore = WIN_SCORE;
     state.players[1].score.finalScore = 0;
@@ -147,6 +183,7 @@ describe("advance FSM", () => {
 
   it("tied at WIN_SCORE does not end the match — another round runs", () => {
     const state = createGame(launch(2));
+    confirmLevel(state);
     advance(state, pump(state), LOOK_AROUND_MS + 1);
     state.players[0].score.finalScore = WIN_SCORE;
     state.players[1].score.finalScore = WIN_SCORE;

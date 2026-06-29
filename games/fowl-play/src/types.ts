@@ -177,13 +177,12 @@ export interface Player {
 /*  Round state                                                               */
 /* -------------------------------------------------------------------------- */
 
-export type Phase = "intro" | "placement" | "race" | "score" | "final";
+export type Phase = "levelSelect" | "intro" | "placement" | "race" | "score" | "final";
 
 /** Match configuration; surfaces in launch.settings. */
 export interface GameConfig {
   winScore: number;
   handSize: number;
-  arenaPool: "all" | "random";
 }
 
 /** Per-player live racing state (only meaningful during race phase). */
@@ -372,6 +371,10 @@ export interface GameState {
   startedAt: number;
   /** Set true on first placement of the match to show the look-around hint. */
   showLookAroundHint: boolean;
+  /** Highlighted arena index during the levelSelect phase. */
+  levelSelectIdx?: number;
+  /** Latch so one stick push = one step while cycling arenas in levelSelect. */
+  levelHeld?: boolean;
 }
 
 /* -------------------------------------------------------------------------- */

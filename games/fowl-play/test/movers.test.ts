@@ -37,7 +37,7 @@ function emptyState(): GameState {
     goalPulses: [],
     soundEvents: [],
     paused: false,
-    config: { winScore: 9, handSize: 5, arenaPool: "all" },
+    config: { winScore: 9, handSize: 5 },
     lastRound: null,
     history: [],
     nextUid: 100,

@@ -23,7 +23,10 @@ having your own trap kill someone else.
 - **One mode** — Party (place → race → score, looped).
 - **2–4 players**, no solo mode in v1.
 - **No** unlocks, shop, level editor, online play, tutorial mode, cosmetics.
-- All pieces and all 3 arenas available from start.
+- All pieces and all 6 arenas available from start. Players pick the arena on an
+  in-game **level-select** screen before round 1; that arena is then fixed for
+  the whole match (no rotation), and placed pieces **persist and accumulate**
+  across rounds so the map gets more chaotic — Ultimate Chicken Horse style.
 - Placeholder SFX, no music in v1.
 - **Visual style**: programmer-art primitives. Rects for platforms, circles for
   characters, distinct silhouette shapes for hazards. Player colors red/blue/
@@ -72,11 +75,18 @@ No double jump, no dash. Keeps the skill ceiling friendly for couch friends.
 
 ## 5. Round structure
 
+Before round 1 there is a one-time **level-select** screen (see §10); the chosen
+arena is reused every round.
+
 | Phase | Length | Notes |
 |---|---|---|
 | Placement | 30s | auto-commit at zero or when all ready |
 | Race | 60s hard cap | 3s countdown at start |
 | Score | 5s | shows round delta + cumulative |
+
+Between rounds the arena is **unchanged** and every player-placed piece stays on
+the map (only the arena's coins/diamond respawn). The map therefore fills up and
+grows more chaotic as the match goes on.
 
 Match length: **first to 9 points**, evaluated at end of each score phase
 (so all rounds finish naturally). Tiebreak order: most coins → most finishes
@@ -149,7 +159,12 @@ Recorded but not scored: trap-self-kill (your own piece killed you — fun stat)
 - Placement phase: zoomed to full arena bounds, static.
 - Off-screen below kill-line = death. No wrap, no constrain.
 
-## 10. Arenas (3 at launch)
+## 10. Arenas (6 at launch)
+
+Players choose one on an in-game **level-select** screen before round 1. Any
+player can cycle the highlighted arena (◄/► on stick or D-pad, or X/Y) over a
+live preview; pressing **A** confirms and locks it in for the whole match. The
+catalog lives in `src/arenas/` and is registered in `src/arenas/index.ts`.
 
 ### The Barnyard
 Wide, short. Mostly horizontal. Gaps over hay bales. 2 coins mid-air requiring
@@ -163,10 +178,21 @@ and 1 diamond on tricky ledge.
 Medium, mixed verticality. Rotating environmental blade that pushes/kills if
 hit. 1 coin near blade for risk/reward. Goal up-and-to-the-right.
 
+### The Henhouse · The Coop · The Roost
+Three additional layouts added after the initial cut, mixing horizontal and
+vertical challenge. See their definitions in `src/arenas/`.
+
 Each arena defines: start zone, goal zone, kill-line, pre-existing solids,
 scorer positions, no-go zones.
 
 ## 11. Controls
+
+### Level-select phase
+| Input | Action |
+|---|---|
+| L-stick / D-pad ◄ ► | cycle highlighted arena (any player) |
+| X / Y | cycle highlighted arena |
+| A | confirm arena, start the match |
 
 ### Placement phase
 | Input | Action |
@@ -248,17 +274,18 @@ games/fowl-play/
     ├── main.ts           # SDK client + bootstrap
     ├── game.ts           # top-level FSM
     ├── types.ts
-    ├── phases/{placement,race,score}.ts
-    ├── physics/{aabb,player,world}.ts
-    ├── pieces/{registry,platform,hazard,mover,helper}.ts
-    ├── arenas/{barnyard,silo,windmill}.ts
-    ├── render/{canvas,camera,hud}.ts
+    ├── phases/{levelSelect,placement,race,score}.ts
+    ├── physics/{aabb,player}.ts
+    ├── pieces/{registry,movers}.ts
+    ├── arenas/{barnyard,silo,windmill,henhouse,coop,roost,index}.ts
+    ├── render/{canvas,camera,hud,assets}.ts
     └── input/gamepad.ts
-└── test/{physics,pieces,scoring,placement,winCondition}.test.ts
+└── test/*.test.ts
 ```
 
-Top-level FSM: `boot → lobby (await launch) → intro → [placement → race →
-score] loop → final → gameOver-emitted`.
+Top-level FSM: `boot → lobby (await launch) → levelSelect → intro → [placement →
+race → score] loop → final → gameOver-emitted`. The arena is chosen once in
+`levelSelect` and reused for every round of the match.
 
 ## 14. Testing plan
 

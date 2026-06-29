@@ -68,7 +68,8 @@ describe("launch.settings → state.config", () => {
     const pump = (frame?: Partial<PlayerFrame>): PlayerFrame[] =>
       state.players.map((p) => ({ ...makeFrame(p.slot), ...(frame ?? {}) }));
 
-    // Skip intro → placement → race → score → final.
+    // Skip levelSelect → intro → placement → race → score → final.
+    advance(state, pump({ confirmDown: true }), 16);
     advance(state, pump(), LOOK_AROUND_MS + 1);
     state.players[0].score.finalScore = 5; // already past the configured threshold
     state.players[1].score.finalScore = 0;
