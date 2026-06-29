@@ -207,13 +207,13 @@ Goal: move `games/raskulls` from a lightweight Raskulls-inspired prototype towar
   - Add at least two more race-friendly offensive/defensive items: stun projectile, swap/slow trap, block-clear burst, or temporary invulnerability.
   - Make held powerup UI icon-based instead of text labels.
 
-- [ ] Make player collisions feel like disruption, not deathmatch combat.
+- [x] Make player collisions feel like disruption, not deathmatch combat.
   - Files: `games/raskulls/src/scenes/PlayScene.ts`
   - Dashing/Frenzy should shove or stun opponents briefly.
   - Shield should negate disruption and possibly reflect shove.
   - Regular body overlap should separate players without dramatic knockback.
 
-- [ ] Update scoring to match mode goals.
+- [x] Update scoring to match mode goals.
   - Files: `games/raskulls/src/systems/scoring.ts`, `games/raskulls/test/scoring.test.ts`
   - Race ranking should prioritize finish position/time.
   - Grand Prix ranking should use round points.
@@ -222,23 +222,23 @@ Goal: move `games/raskulls` from a lightweight Raskulls-inspired prototype towar
 
 ### Phase 5 — Presentation and world identity
 
-- [ ] Replace code-generated placeholder sprites with a coherent Raskulls-like art direction.
+- [x] Replace code-generated placeholder sprites with a coherent Raskulls-like art direction.
   - Files: `games/raskulls/src/assets.ts`, `games/raskulls/src/style.css`, possible new files under `games/raskulls/public/`
   - Use expressive skull characters, chunky bright block tiles, readable Boosties, and punchy break effects.
   - Avoid copying protected original assets directly; create original lookalike-inspired assets.
 
-- [ ] Add named character variants.
+- [x] Add named character variants.
   - Files: `games/raskulls/src/assets.ts`, `games/raskulls/src/scenes/ModeSelectScene.ts`
   - Add simple variants inspired by archetypes such as King, Ninja, Dragon, Wizard, and Pirat.
   - Tie each local player color/profile to a selected character skin.
   - Add small expression changes for idle, running, stunned, Frenzy, and finish states.
 
-- [ ] Add light story framing and humor without blocking quick play.
+- [x] Add light story framing and humor without blocking quick play.
   - Files: `games/raskulls/src/scenes/ModeSelectScene.ts`, `games/raskulls/src/scenes/ResultsScene.ts`
   - Add quick pre-race title cards, rivalry blurbs, and round result quips.
   - Keep it skippable and short because this is a party shell game.
 
-- [ ] Improve camera and split-screen behavior.
+- [x] Improve camera and split-screen behavior.
   - Files: `games/raskulls/src/scenes/PlayScene.ts`
   - Current shared camera can make race spacing awkward.
   - Evaluate dynamic split-screen or rubber-band camera constraints for far-apart players.
@@ -246,19 +246,19 @@ Goal: move `games/raskulls` from a lightweight Raskulls-inspired prototype towar
 
 ### Phase 6 — Validation
 
-- [ ] Build a mechanical accuracy test suite.
+- [x] Build a mechanical accuracy test suite.
   - Files: `games/raskulls/test/terrain.test.ts`, `games/raskulls/test/scoring.test.ts`, new tests as needed
   - Cover block gravity, merging, gray-chain explosions, Frenzy fill/drain, hazard rules, and playlist scoring.
   - Keep most logic tests outside Phaser scenes so they run fast in Vitest.
 
-- [ ] Add manual playtest scenarios.
+- [x] Add manual playtest scenarios.
   - Files: new `games/raskulls/PLAYTEST.md`
   - Scenario 1: four-player race with block shortcuts.
   - Scenario 2: Frenzy route where Boostie placement decides the fastest line.
   - Scenario 3: gray-block chain shortcut.
   - Scenario 4: powerup disruption without unfair instant death.
 
-- [ ] Capture tuning notes after every playtest.
+- [x] Capture tuning notes after every playtest.
   - Files: new `games/raskulls/TUNING.md`
   - Track speed, jump, wand cooldown, Frenzy drain, pickup density, race length, and camera issues.
   - Record exact values before changing them so tuning stays reversible.
