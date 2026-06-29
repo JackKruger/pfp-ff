@@ -4,7 +4,7 @@ import { bladeTip, raceElapsedMs } from "../phases/race.js";
 import { pieceAabb, PIECES } from "../pieces/registry.js";
 import { ARENAS } from "../arenas/index.js";
 import type { GameState } from "../types.js";
-import { arenaBg, IMG, pieceImage, ready, tinted } from "./assets.js";
+import { arenaBg, IMG, pieceImage, ready, SHEET, type Sheet, tinted } from "./assets.js";
 import { type CameraState, lerpCamera, makeCamera, targetFor } from "./camera.js";
 import { drawHud } from "./hud.js";
 
@@ -49,6 +49,7 @@ export class Renderer {
     this.ctx.translate(-this.camera.x, -this.camera.y);
 
     this.drawArena(state);
+    if (state.phase === "placement") this.drawPlacementGrid(state);
     this.drawPieces(state);
     this.drawArenaDynamics(state);
     this.drawGoalPulses(state);
@@ -68,10 +69,19 @@ export class Renderer {
     const arena = state.arena;
     ctx.textAlign = "center";
 
-    // Title
-    ctx.fillStyle = "#f59e0b";
-    ctx.font = "700 34px system-ui, sans-serif";
-    ctx.fillText("CHOOSE YOUR ARENA", cw / 2, ch * 0.16);
+    // Wordmark logo if present, else a text title.
+    if (ready(IMG.wordmark)) {
+      const ww = Math.min(cw * 0.42, 380);
+      const wh = ww * (IMG.wordmark.naturalHeight / IMG.wordmark.naturalWidth);
+      ctx.drawImage(IMG.wordmark, cw / 2 - ww / 2, ch * 0.04, ww, wh);
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "600 18px system-ui, sans-serif";
+      ctx.fillText("Choose your arena", cw / 2, ch * 0.2);
+    } else {
+      ctx.fillStyle = "#f59e0b";
+      ctx.font = "700 34px system-ui, sans-serif";
+      ctx.fillText("CHOOSE YOUR ARENA", cw / 2, ch * 0.16);
+    }
 
     // Preview box — arena art (cover-fit) or palette gradient fallback.
     const pw = Math.min(cw * 0.6, 720);
@@ -211,8 +221,16 @@ export class Renderer {
         const phase = (now / 250 + p.uid * 0.7) % (Math.PI * 2);
         const pulse = 0.65 + 0.35 * Math.sin(phase);
         this.ctx.globalAlpha = pulse;
-        if (p.pieceId === "coin" && ready(IMG.coin)) {
+        const spin = SHEET.coinSpin;
+        if (p.pieceId === "coin" && ready(spin.img)) {
+          const fw = spin.img.naturalWidth / spin.frames;
+          const fh = spin.img.naturalHeight;
+          const f = Math.floor(now / 80 + p.uid) % spin.frames;
+          this.ctx.drawImage(spin.img, f * fw, 0, fw, fh, aabb.x, aabb.y, aabb.w, aabb.h);
+        } else if (p.pieceId === "coin" && ready(IMG.coin)) {
           this.ctx.drawImage(IMG.coin, aabb.x, aabb.y, aabb.w, aabb.h);
+        } else if (p.pieceId === "diamond" && ready(IMG.diamond)) {
+          this.ctx.drawImage(IMG.diamond, aabb.x, aabb.y, aabb.w, aabb.h);
         } else {
           this.ctx.fillStyle = colorForPiece(p.pieceId);
           this.ctx.beginPath();
@@ -265,6 +283,47 @@ export class Renderer {
     this.ctx.translate(aabb.x + aabb.w / 2, aabb.y + aabb.h / 2);
     this.ctx.rotate(angle);
     this.ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    this.ctx.restore();
+  }
+
+  /**
+   * Draw one frame of a tinted sprite-sheet strip, centered at (cx, cy) and
+   * scaled to `size`. `facing < 0` mirrors horizontally. Returns false (so the
+   * caller can fall back) if the sheet image hasn't loaded yet.
+   */
+  private drawSheet(
+    sheet: Sheet,
+    frame: number,
+    color: string,
+    cx: number,
+    cy: number,
+    size: number,
+    facing: number,
+  ): boolean {
+    const img = sheet.img;
+    if (!ready(img)) return false;
+    const fw = img.naturalWidth / sheet.frames;
+    const fh = img.naturalHeight;
+    const idx = ((Math.floor(frame) % sheet.frames) + sheet.frames) % sheet.frames;
+    const canvas = tinted(img, color);
+    this.ctx.save();
+    this.ctx.translate(cx, cy);
+    if (facing < 0) this.ctx.scale(-1, 1);
+    this.ctx.drawImage(canvas, idx * fw, 0, fw, fh, -size / 2, -size / 2, size, size);
+    this.ctx.restore();
+    return true;
+  }
+
+  /** Subtle tiled snap-grid over the arena during placement. */
+  private drawPlacementGrid(state: GameState): void {
+    if (!ready(IMG.grid)) return;
+    const pattern = this.ctx.createPattern(IMG.grid, "repeat");
+    if (!pattern) return;
+    const b = state.arena.bounds;
+    this.ctx.save();
+    this.ctx.globalAlpha = 0.22;
+    this.ctx.fillStyle = pattern;
+    this.ctx.fillRect(b.x, b.y, b.w, b.h);
     this.ctx.restore();
   }
 
@@ -334,12 +393,25 @@ export class Renderer {
       }
       if (!actor.alive) continue;
 
-      // Live player: tinted chicken sprite, else a filled circle with outline.
+      // Live player: animated chicken (run/jump/idle), else a filled circle.
       const cx = actor.x + PLAYER_W / 2;
       const cy = actor.y + PLAYER_H / 2;
-      if (ready(IMG.chicken)) {
-        const s = PLAYER_W + 12;
-        this.ctx.drawImage(tinted(IMG.chicken, color), cx - s / 2, cy - s / 2, s, s);
+      const s = PLAYER_W + 12;
+      const facing = actor.vx < -8 ? -1 : 1;
+      const grounded = actor.contact === "ground";
+      let sheet = SHEET.chickenIdle;
+      let frame = 0;
+      if (!grounded) {
+        sheet = SHEET.chickenJump;
+        frame = actor.vy < -120 ? 0 : actor.vy > 120 ? 2 : 1;
+      } else if (Math.abs(actor.vx) > 20) {
+        sheet = SHEET.chickenRun;
+        frame = Math.floor(Date.now() / 90);
+      }
+      const drew =
+        this.drawSheet(sheet, frame, color, cx, cy, s, facing) ||
+        this.drawSheet(SHEET.chickenIdle, 0, color, cx, cy, s, facing);
+      if (drew) {
         if (actor.finished) {
           this.ctx.strokeStyle = "#ffffff";
           this.ctx.lineWidth = 2;
@@ -394,11 +466,16 @@ export class Renderer {
       this.ctx.restore();
 
       // Cursor reticle on top so the player can find their cursor easily.
-      this.ctx.strokeStyle = color;
-      this.ctx.lineWidth = 2;
-      this.ctx.beginPath();
-      this.ctx.arc(cursor.x, cursor.y, 8, 0, Math.PI * 2);
-      this.ctx.stroke();
+      if (ready(IMG.cursor)) {
+        const cs = 28;
+        this.ctx.drawImage(tinted(IMG.cursor, color), cursor.x - cs / 2, cursor.y - cs / 2, cs, cs);
+      } else {
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(cursor.x, cursor.y, 8, 0, Math.PI * 2);
+        this.ctx.stroke();
+      }
     }
   }
 

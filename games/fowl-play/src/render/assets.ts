@@ -21,21 +21,67 @@ function load(name: string): HTMLImageElement | null {
 export const IMG = {
   chicken: load("chicken.png"),
   skull: load("skull.png"),
+  cursor: load("cursor.png"),
+  grid: load("placement-grid.png"),
+  wordmark: load("wordmark.png"),
+  // Static piece sprites.
   plank: load("piece-plank.png"),
   block: load("piece-block.png"),
   spike: load("piece-spike.png"),
   saw: load("piece-saw.png"),
   coin: load("piece-coin.png"),
+  diamond: load("piece-diamond.png"),
+  ice: load("piece-ice.png"),
+  bouncy: load("piece-bouncy.png"),
+  conveyor: load("piece-conveyor.png"),
+  coals: load("piece-coals.png"),
+  fan: load("piece-fan.png"),
+  puck: load("piece-puck.png"),
+  crusher: load("piece-crusher.png"),
+  mace: load("piece-mace.png"),
+  pendulum: load("piece-pendulum.png"),
+  log: load("piece-log.png"),
+  ladder: load("piece-ladder.png"),
+  trampoline: load("piece-trampoline.png"),
+  // Arena backgrounds.
   bgBarnyard: load("bg-barnyard.png"),
   bgSilo: load("bg-silo.png"),
   bgWindmill: load("bg-windmill.png"),
 } as const;
 
-/** Static piece sprites keyed by piece id (only the ones with art in repo). */
+/**
+ * A horizontal sprite-sheet strip. Frame size is derived from the loaded image
+ * (`naturalWidth / frames`) so 1× or 2× exports both work.
+ */
+export interface Sheet {
+  img: HTMLImageElement | null;
+  frames: number;
+}
+
+export const SHEET = {
+  chickenIdle: { img: IMG.chicken, frames: 1 },
+  chickenRun: { img: load("chicken-run.png"), frames: 6 },
+  chickenJump: { img: load("chicken-jump.png"), frames: 3 },
+  coinSpin: { img: load("coin-spin.png"), frames: 8 },
+} satisfies Record<string, Sheet>;
+
+/** Static piece sprites keyed by piece id. Saw/coin/diamond are drawn specially. */
 const PIECE_IMG: Partial<Record<PieceId, HTMLImageElement | null>> = {
   plank: IMG.plank,
   block: IMG.block,
   spike: IMG.spike,
+  ice: IMG.ice,
+  bouncy: IMG.bouncy,
+  conveyor: IMG.conveyor,
+  coals: IMG.coals,
+  fan: IMG.fan,
+  puck: IMG.puck,
+  crusher: IMG.crusher,
+  mace: IMG.mace,
+  pendulum: IMG.pendulum,
+  log: IMG.log,
+  ladder: IMG.ladder,
+  trampoline: IMG.trampoline,
 };
 
 /** Arena background sprites keyed by arena id (only the ones with art). */
