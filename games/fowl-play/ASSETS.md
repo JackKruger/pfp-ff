@@ -28,27 +28,27 @@ Treat this as a "drop it in when you have it" list rather than a blocker.
 ## Tier 1 — biggest visual payoff
 
 ### Characters
-- [ ] `chicken.png` — 64×64, transparent, **tintable**. Round chicken-ish
+- [x] `chicken.png` — 64×64, transparent, **tintable**. Round chicken-ish
       silhouette, idle frame. Replaces the player circle. Will be used as base
       for animation sheet later.
-- [ ] `skull.png` — 32×32, transparent, **tintable**. Drops at the death
+- [x] `skull.png` — 32×32, transparent, **tintable**. Drops at the death
       position to mark where a player died this round.
 
 ### Arena backgrounds (1 per arena)
-- [ ] `bg-barnyard.png` — 1920×1080, opaque. Wide farm pasture, hay bales,
+- [x] `bg-barnyard.png` — 1920×1080, opaque. Wide farm pasture, hay bales,
       distant fence. Wider than canvas because camera pans.
-- [ ] `bg-silo.png` — 1080×1920, opaque. Tall silo interior, planks and
+- [x] `bg-silo.png` — 1080×1920, opaque. Tall silo interior, planks and
       rafters. Portrait because arena is vertical.
-- [ ] `bg-windmill.png` — 1920×1280, opaque. Windmill exterior, sky, hills.
+- [x] `bg-windmill.png` — 1920×1280, opaque. Windmill exterior, sky, hills.
 
 ### Piece sprites — Tier 1 (most-placed, ugliest as rects)
-- [ ] `piece-plank.png` — 96×16, transparent. Wooden plank with grain.
-- [ ] `piece-block.png` — 32×32, transparent. Small stone/wood block.
-- [ ] `piece-spike.png` — 64×16, transparent. Row of upward iron spikes; the
+- [x] `piece-plank.png` — 96×16, transparent. Wooden plank with grain.
+- [x] `piece-block.png` — 32×32, transparent. Small stone/wood block.
+- [x] `piece-spike.png` — 64×16, transparent. Row of upward iron spikes; the
       lethal surface is the top edge only.
-- [ ] `piece-saw.png` — 64×64, transparent. Spinning saw blade with hub. We
+- [x] `piece-saw.png` — 64×64, transparent. Spinning saw blade with hub. We
       rotate it in code (provide just one frame).
-- [ ] `piece-coin.png` — 32×32, transparent. Gold coin, slight rim.
+- [x] `piece-coin.png` — 32×32, transparent. Gold coin, slight rim.
 
 ## Tier 2 — finish the piece library
 
@@ -89,7 +89,7 @@ Treat this as a "drop it in when you have it" list rather than a blocker.
       pattern for the placement overlay so players can see the snap.
 
 ### Marketing / catalog
-- [ ] `thumbnail.png` — 220×160. Game-card thumbnail used by the shell
+- [x] `thumbnail.png` — 220×160. Game-card thumbnail used by the shell
       library. Place at `apps/shell/public/thumbnails/fowl-play.png`.
 - [ ] `hero-art.png` — 1280×360, opaque/transparent OK. Wide art for the
       shell's featured hero banner (only if we promote to featured).
