@@ -98,7 +98,7 @@ export class ModeSelectScene extends Phaser.Scene {
 
   private createCard(index: number, label: string, detail: string): Phaser.GameObjects.Container {
     const x = 120 + index * 220;
-    const y = 190;
+    const y = 275;
     const rect = this.add.rectangle(0, 0, 190, 250, 0x1f2937, 1);
     rect.setStrokeStyle(3, 0x374151, 1);
     const glyph = this.add.text(
