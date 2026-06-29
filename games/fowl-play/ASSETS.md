@@ -52,61 +52,62 @@ Treat this as a "drop it in when you have it" list rather than a blocker.
 
 ## Tier 2 — finish the piece library
 
-- [ ] `piece-ice.png` — 64×32, transparent. Glossy ice block with highlight.
-- [ ] `piece-bouncy.png` — 64×16, transparent. Springy red/white pad.
-- [ ] `piece-conveyor.png` — 96×16, transparent. Belt with arrows (we mirror in
+- [x] `piece-ice.png` — 64×32, transparent. Glossy ice block with highlight.
+- [x] `piece-bouncy.png` — 64×16, transparent. Springy red/white pad.
+- [x] `piece-conveyor.png` — 96×16, transparent. Belt with arrows (we mirror in
       code for direction).
-- [ ] `piece-crusher.png` — 48×48, transparent. Heavy iron weight with chain
+- [x] `piece-crusher.png` — 48×48, transparent. Heavy iron weight with chain
       texture.
-- [ ] `piece-coals.png` — 48×16, transparent. Glowing coals with subtle flame
+- [x] `piece-coals.png` — 48×16, transparent. Glowing coals with subtle flame
       hints baked in.
-- [ ] `piece-fan.png` — 48×48, transparent. Caged fan, blades visible.
-- [ ] `piece-puck.png` — 32×32, transparent. Hockey puck top-down.
-- [ ] `piece-mace.png` — 48×16 (head) + chain segment 8×8 tileable, transparent.
-- [ ] `piece-pendulum.png` — 96×16, transparent. Like the plank but with pivot
+- [x] `piece-fan.png` — 48×48, transparent. Caged fan, blades visible.
+- [x] `piece-puck.png` — 32×32, transparent. Hockey puck top-down.
+- [x] `piece-mace.png` — 48×16 (head) + chain segment `piece-chain.png` 8×8
+      tileable, transparent.
+- [x] `piece-pendulum.png` — 96×16, transparent. Like the plank but with pivot
       ring at top-center.
-- [ ] `piece-log.png` — 16×96, transparent. Vertical wooden log.
-- [ ] `piece-trampoline.png` — 48×16, transparent. Stretched canvas with frame.
-- [ ] `piece-ladder.png` — 16×96, transparent. Wooden ladder, rungs visible.
-- [ ] `piece-diamond.png` — 40×40, transparent. Faceted gem with sparkle.
+- [x] `piece-log.png` — 16×96, transparent. Vertical wooden log.
+- [x] `piece-trampoline.png` — 48×16, transparent. Stretched canvas with frame.
+- [x] `piece-ladder.png` — 16×96, transparent. Wooden ladder, rungs visible.
+- [x] `piece-diamond.png` — 40×40, transparent. Faceted gem with sparkle.
 
 ## Tier 3 — UI & polish
 
 ### Phase / HUD elements
-- [ ] `hud-clock.png` — 64×64, transparent. Round timer face; we draw the hand
+- [x] `hud-clock.png` — 64×64, transparent. Round timer face; we draw the hand
       in code. Used for placement & race timers.
-- [ ] `hud-player-chip-bg.png` — 240×72, transparent, **tintable**. Background
+- [x] `hud-player-chip-bg.png` — 240×72, transparent, **tintable**. Background
       for each player's score chip in the top HUD.
-- [ ] `phase-banner-placement.png` — 600×120, transparent. "Place your trap!"
+- [x] `phase-banner-placement.png` — 600×120, transparent. "Place your trap!"
       banner shown for 1s at phase start. (Optional — fall back to text.)
-- [ ] `phase-banner-race.png` — 600×120, transparent. "GO!" banner.
-- [ ] `phase-banner-score.png` — 600×120, transparent. "Round results" banner.
+- [x] `phase-banner-race.png` — 600×120, transparent. "GO!" banner.
+- [x] `phase-banner-score.png` — 600×120, transparent. "Round results" banner.
 
 ### Cursor / placement
-- [ ] `cursor.png` — 32×32, transparent, **tintable**. Reticle for each
+- [x] `cursor.png` — 32×32, transparent, **tintable**. Reticle for each
       player's placement cursor. We tint per-slot.
-- [ ] `placement-grid.png` — 32×32, **tileable**, transparent. Subtle grid dot
+- [x] `placement-grid.png` — 32×32, **tileable**, transparent. Subtle grid dot
       pattern for the placement overlay so players can see the snap.
 
 ### Marketing / catalog
 - [x] `thumbnail.png` — 220×160. Game-card thumbnail used by the shell
       library. Place at `apps/shell/public/thumbnails/fowl-play.png`.
-- [ ] `hero-art.png` — 1280×360, opaque/transparent OK. Wide art for the
+- [x] `hero-art.png` — 1280×360, opaque/transparent OK. Wide art for the
       shell's featured hero banner (only if we promote to featured).
-- [ ] `wordmark.png` — ~800×260, transparent. Stylized "FOWL PLAY" logo for the
+- [x] `wordmark.png` — ~800×260, transparent. Stylized "FOWL PLAY" logo for the
       attract / pre-launch screen.
 
 ## Tier 4 — animation sheets (post-MVP polish)
 
 When we move past programmer-art:
 
-- [ ] `chicken-run.png` — 6 frames × 64×64, sprite sheet, **tintable**.
-- [ ] `chicken-jump.png` — 3 frames × 64×64 (rise/peak/fall), **tintable**.
-- [ ] `chicken-die.png` — 4 frames × 64×64. Squish/poof. **Tintable**.
-- [ ] `saw-spin.png` — 8 frames × 64×64 if we'd rather pre-render the spin than
+- [x] `chicken-run.png` — 6 frames × 64×64, sprite sheet, **tintable**.
+- [x] `chicken-jump.png` — 3 frames × 64×64 (rise/peak/fall), **tintable**.
+- [x] `chicken-die.png` — 4 frames × 64×64. Squish/poof. **Tintable**.
+- [x] `saw-spin.png` — 8 frames × 64×64 if we'd rather pre-render the spin than
       rotate in code.
-- [ ] `crusher-fall.png` — 4 frames × 48×48 anticipation/drop.
-- [ ] `coin-spin.png` — 8 frames × 32×32 spin animation.
+- [x] `crusher-fall.png` — 4 frames × 48×48 anticipation/drop.
+- [x] `coin-spin.png` — 8 frames × 32×32 spin animation.
 
 ---
 
