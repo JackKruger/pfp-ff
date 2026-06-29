@@ -1,6 +1,7 @@
 // Boot. Rapier WASM init must happen before Game is constructed.
 import { initRapier } from '../upstream/src/physics/cannon-shim.js';
 import { createPfpRuntime } from './pfp/PfpRuntime.js';
+import { PfpControls } from './input/PfpControls.js';
 import { installPfpExternalMatch } from './pfp/externalMatch.js';
 import { buildStickSmashResult } from './pfp/results.js';
 import '../upstream/src/util/__weaponDebug.js';
@@ -17,7 +18,7 @@ async function boot() {
   const game = new Game();
   window.game = game;
   installPfpExternalMatch(game, {
-    controls: pfpRuntime.controls,
+    controls: new PfpControls(pfpRuntime.controls),
     onGameOver: ({ context, startedAt, endedAt, players, winner, reason }) => {
       pfpRuntime.client.gameOver(buildStickSmashResult({
         context,

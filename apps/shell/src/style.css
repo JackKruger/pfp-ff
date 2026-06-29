@@ -1414,3 +1414,111 @@ body::before {
   color: var(--text-dim);
   font-size: 0.85rem;
 }
+
+/* ── Home screen corner player prompts ─────────────────────── */
+.home-screen {
+  position: relative;
+}
+
+.player-corner {
+  position: absolute;
+  z-index: 10;
+  padding: 7px 11px;
+  background: rgba(22, 25, 38, 0.88);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 108px;
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.player-corner--tl { top: 18px; left: 18px; }
+.player-corner--tr { top: 18px; right: 18px; align-items: flex-end; }
+.player-corner--bl { bottom: 18px; left: 18px; }
+.player-corner--br { bottom: 18px; right: 18px; align-items: flex-end; }
+
+.player-corner__label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.player-corner__joined {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.player-corner__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.player-corner__name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.player-corner__prompt {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--focus);
+}
+
+.player-corner__no-ctrl {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  opacity: 0.55;
+}
+
+/* ── Players modal ─────────────────────────────────────────── */
+.players-modal {
+  min-width: 300px;
+}
+
+.players-modal__slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.players-modal__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface2);
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.players-modal__label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--text-dim);
+  min-width: 28px;
+}
+
+.players-modal__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.players-modal__name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.players-modal__empty {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}

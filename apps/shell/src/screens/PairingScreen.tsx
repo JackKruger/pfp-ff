@@ -61,6 +61,11 @@ export function PairingScreen() {
       setPairedSlots([...gamepadSlots, ...keyboardSlots].sort((a, b) => a.slot - b.slot));
     };
 
+    // Pre-populate from session state persisted in the store.
+    const stored = useShell.getState().pairedSlots;
+    const storedGamepadSlots = stored.filter((s) => s.gamepadIndex >= 0 && s.slot < maxPlayers);
+    const storedKeyboardSlots = stored.filter((s) => s.gamepadIndex < 0 && s.slot < maxPlayers);
+
     const joinKeyboardSlot = (slot: number) => {
       if (slot >= maxPlayers) return;
       if (gamepadSlotsRef.current.some((joined) => joined.slot === slot)) return;
@@ -103,6 +108,15 @@ export function PairingScreen() {
       gamepadSlotsRef.current = slots;
       publishSlots();
     });
+
+    // Restore previous session slots without requiring re-press of A.
+    if (storedGamepadSlots.length > 0) {
+      lobby.initSlots(storedGamepadSlots);
+    }
+    if (storedKeyboardSlots.length > 0) {
+      keyboardSlotsRef.current = storedKeyboardSlots;
+      publishSlots();
+    }
 
     const unregisterTick = ticker.onTick(() => {
       const poller = ticker.poller;
@@ -191,6 +205,7 @@ export function PairingScreen() {
   const canStart = canStartGame(pairedSlots.length, minPlayers);
   canStartRef.current = canStart;
   const slotCount = selectedGame?.players.max ?? 4;
+  const isManageMode = selectedGame === null;
 
   // How many unjoinable slots have controllers available for them.
   const joinedCount = pairedSlots.length;
@@ -199,7 +214,7 @@ export function PairingScreen() {
   return (
     <div className="screen pairing-screen">
       <header className="pairing-screen__header">
-        <h2>Who's Playing?</h2>
+        <h2>{isManageMode ? "Manage Players" : "Who's Playing?"}</h2>
         {selectedGame && <p className="pairing-screen__game">{selectedGame.name}</p>}
       </header>
 
@@ -226,7 +241,18 @@ export function PairingScreen() {
         })}
       </div>
 
-      <p className="pairing-screen__hint">Ⓐ join · Ⓑ leave · ◀ ▶ profile · Start to begin</p>
+      <p className="pairing-screen__hint">
+        {isManageMode ? (
+          <>
+            <kbd>A</kbd> join · <kbd>B</kbd> leave · <kbd>←</kbd><kbd>→</kbd> change profile
+          </>
+        ) : (
+          <>
+            <kbd>Enter</kbd> / <kbd>A</kbd> join · <kbd>Esc</kbd> / <kbd>B</kbd> leave · <kbd>←</kbd>
+            <kbd>→</kbd> profile · <kbd>1</kbd>-<kbd>4</kbd> keyboard
+          </>
+        )}
+      </p>
 
       {selectedGame?.settings?.fields.length ? (
         <section className="pairing-settings" aria-label={`${selectedGame.name} settings`}>
@@ -248,13 +274,15 @@ export function PairingScreen() {
         <Btn id="pairing-back" onClick={() => navigate("home")} variant="ghost" autoFocus>
           ← Back
         </Btn>
-        <Btn id="pairing-start" onClick={() => canStart && navigate("game")} disabled={!canStart}>
-          Start Game ▶
-        </Btn>
+        {!isManageMode && (
+          <Btn id="pairing-start" onClick={() => canStart && navigate("game")} disabled={!canStart}>
+            Start Game ▶
+          </Btn>
+        )}
       </div>
 
-      {minPlayers > 1 && pairedSlots.length < minPlayers && (
-        <p className="pairing-screen__need">Best with {minPlayers}+ players</p>
+      {!isManageMode && minPlayers > 1 && pairedSlots.length < minPlayers && (
+        <p className="pairing-screen__need">Requires {minPlayers}+ players to start</p>
       )}
     </div>
   );
