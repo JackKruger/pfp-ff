@@ -24,6 +24,11 @@ export const IMG = {
   cursor: load("cursor.png"),
   grid: load("placement-grid.png"),
   wordmark: load("wordmark.png"),
+  hudClock: load("hud-clock.png"),
+  chipBg: load("hud-player-chip-bg.png"),
+  bannerPlacement: load("phase-banner-placement.png"),
+  bannerRace: load("phase-banner-race.png"),
+  bannerScore: load("phase-banner-score.png"),
   // Static piece sprites.
   plank: load("piece-plank.png"),
   block: load("piece-block.png"),

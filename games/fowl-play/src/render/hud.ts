@@ -1,9 +1,10 @@
-import { URGENCY_THRESHOLD_MS } from "../constants.js";
+import { PLACEMENT_MS, RACE_MAX_MS, SCORE_MS, URGENCY_THRESHOLD_MS } from "../constants.js";
 import { PIECES } from "../pieces/registry.js";
 import { pieceForCursor } from "../phases/placement.js";
-import { countdownRemainingMs, raceIsCountdown } from "../phases/race.js";
+import { countdownRemainingMs, raceElapsedMs, raceIsCountdown } from "../phases/race.js";
 import { computeStandings } from "../phases/score.js";
 import type { GameState, RoundOutcome } from "../types.js";
+import { IMG, ready, tinted } from "./assets.js";
 
 /** Top-overlay HUD: player chips, phase banner, timer, overlays. */
 export function drawHud(
@@ -14,6 +15,7 @@ export function drawHud(
 ): void {
   drawPlayerChips(ctx, state, cw);
   drawBanner(ctx, state, cw);
+  drawPhaseBanner(ctx, state, cw, ch);
 
   if (state.phase === "race" && raceIsCountdown(state)) drawCountdown(ctx, state, cw, ch);
   if (state.phase === "score") drawScoreOverlay(ctx, state, cw, ch);
@@ -63,10 +65,18 @@ function drawPlayerChips(ctx: CanvasRenderingContext2D, state: GameState, cw: nu
     const p = state.players[i];
     const x = 16 + i * (chipW + 8);
     const y = 16;
-    ctx.fillStyle = "rgba(15,23,42,0.85)";
-    ctx.fillRect(x, y, chipW, 56);
-    ctx.fillStyle = p.color;
-    ctx.fillRect(x, y, 6, 56);
+    const chipH = 56;
+    if (ready(IMG.chipBg)) {
+      // Tinted chip art + a dark inner band so text stays legible on any slot color.
+      ctx.drawImage(tinted(IMG.chipBg, p.color), x, y, chipW, chipH);
+      ctx.fillStyle = "rgba(15,23,42,0.55)";
+      ctx.fillRect(x + 10, y + 6, chipW - 16, chipH - 12);
+    } else {
+      ctx.fillStyle = "rgba(15,23,42,0.85)";
+      ctx.fillRect(x, y, chipW, chipH);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(x, y, 6, chipH);
+    }
     ctx.fillStyle = "#e2e8f0";
     ctx.font = "600 14px system-ui, sans-serif";
     ctx.textBaseline = "top";
@@ -90,7 +100,52 @@ function drawPlayerChips(ctx: CanvasRenderingContext2D, state: GameState, cw: nu
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Phase banner                                                              */
+/*  Phase banner art                                                          */
+/* -------------------------------------------------------------------------- */
+
+const PHASE_BANNER_MS = 1300;
+
+/**
+ * Transient phase-start banner image (placement / GO / round-results), shown for
+ * ~1.3s with a quick fade in/out. Falls back to nothing (the text banner from
+ * drawBanner always renders) if the art isn't present.
+ */
+function drawPhaseBanner(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  cw: number,
+  ch: number,
+): void {
+  let img: HTMLImageElement | null = null;
+  let elapsed = -1;
+  if (state.phase === "placement") {
+    img = IMG.bannerPlacement;
+    elapsed = PLACEMENT_MS - state.phaseTimer;
+  } else if (state.phase === "race" && !raceIsCountdown(state)) {
+    img = IMG.bannerRace;
+    elapsed = raceElapsedMs(state);
+  } else if (state.phase === "score") {
+    img = IMG.bannerScore;
+    elapsed = SCORE_MS - state.phaseTimer;
+  }
+  if (!ready(img) || elapsed < 0 || elapsed > PHASE_BANNER_MS) return;
+
+  const alpha =
+    elapsed < 200
+      ? elapsed / 200
+      : elapsed > PHASE_BANNER_MS - 400
+        ? (PHASE_BANNER_MS - elapsed) / 400
+        : 1;
+  const bw = Math.min(cw * 0.5, 520);
+  const bh = bw * (img.naturalHeight / img.naturalWidth);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  ctx.drawImage(img, cw / 2 - bw / 2, ch * 0.2, bw, bh);
+  ctx.restore();
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Phase banner (text) + timer clock                                         */
 /* -------------------------------------------------------------------------- */
 
 function drawBanner(ctx: CanvasRenderingContext2D, state: GameState, cw: number): void {
@@ -113,6 +168,41 @@ function drawBanner(ctx: CanvasRenderingContext2D, state: GameState, cw: number)
   const subBanner = subText(state, secs);
   const sw = ctx.measureText(subBanner).width;
   ctx.fillText(subBanner, (cw - sw) / 2, 124);
+
+  if (subBanner) drawTimerClock(ctx, state, (cw - sw) / 2 - 30, 122, urgent);
+}
+
+/** Small clock face with a sweeping hand, drawn left of the sub-banner timer. */
+function drawTimerClock(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  x: number,
+  y: number,
+  urgent: boolean,
+): void {
+  if (!ready(IMG.hudClock)) return;
+  let frac = -1; // fraction of time remaining, 1 → 0
+  if (state.phase === "placement") frac = state.phaseTimer / PLACEMENT_MS;
+  else if (state.phase === "race" && !raceIsCountdown(state))
+    frac = 1 - raceElapsedMs(state) / RACE_MAX_MS;
+  if (frac < 0) return;
+  frac = Math.max(0, Math.min(1, frac));
+
+  const s = 22;
+  const cx = x;
+  const cy = y;
+  ctx.drawImage(IMG.hudClock, cx - s / 2, cy - s / 2, s, s);
+  // Hand: points up at full time, sweeps clockwise as it runs out.
+  const angle = -Math.PI / 2 + (1 - frac) * Math.PI * 2;
+  ctx.save();
+  ctx.strokeStyle = urgent ? "#ef4444" : "#0f172a";
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + Math.cos(angle) * s * 0.34, cy + Math.sin(angle) * s * 0.34);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function bannerText(state: GameState): string {
