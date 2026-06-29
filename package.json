@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel --filter @pfp/shell --filter @pfp/raskulls --filter @pfp/pong --filter @pfp/space-invaders --filter @pfp/stick-smash --filter @pfp/iron-yard dev",
+    "dev": "pnpm -r --parallel --filter @pfp/shell --filter @pfp/raskulls --filter @pfp/pong --filter @pfp/space-invaders --filter @pfp/stick-smash --filter @pfp/iron-yard --filter @pfp/fowl-play dev",
     "build": "pnpm typecheck && pnpm -r --if-present --filter \"./packages/*\" build && pnpm -r --if-present --filter \"./games/*\" build && pnpm -r --if-present --filter \"./apps/*\" build",
     "screenshot": "node scripts/screenshots.mjs",
     "generate:game-catalog": "node scripts/generate-game-catalog.mjs",

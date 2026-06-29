@@ -1,0 +1,16 @@
+{
+  "name": "@pfp/fowl-play",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5179",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4179",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "pnpm build && vitest run test/e2e.test.ts"
+  },
+  "dependencies": {
+    "@pfp/sdk": "workspace:*"
+  }
+}

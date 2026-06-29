@@ -64,6 +64,12 @@ importers:
         specifier: ^4.7.0
         version: 4.7.0(vite@5.4.21(@types/node@22.20.0))
 
+  games/fowl-play:
+    dependencies:
+      '@pfp/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+
   games/iron-yard:
     dependencies:
       '@dimforge/rapier3d-compat':
