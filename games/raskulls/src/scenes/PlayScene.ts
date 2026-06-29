@@ -451,6 +451,7 @@ export abstract class PlayScene extends Phaser.Scene {
     for (const tile of destroyed) {
       this.redrawTile(tile.tileX, tile.tileY);
       this.addBreakFlash(tile.tileX, tile.tileY);
+      this.addBreakDebris(tile.tileX, tile.tileY);
     }
     this.onSuccessfulDig(player, destroyed.length);
     this.settleBlocksAndResolveChains();
@@ -552,6 +553,7 @@ export abstract class PlayScene extends Phaser.Scene {
           player.stats.blocksBroken += 1;
           this.redrawTile(tile.tileX, tile.tileY);
           this.addBreakFlash(tile.tileX, tile.tileY);
+          this.addBreakDebris(tile.tileX, tile.tileY);
         }
       }
     }
@@ -645,13 +647,16 @@ export abstract class PlayScene extends Phaser.Scene {
       this.onPickupCollected(player, pickup.kind);
       if (pickup.kind === "gem") {
         player.stats.gems += 1;
+        this.addPickupSpark(pickup.tileX, pickup.tileY, 0x22d3ee);
       } else if (pickup.kind === "boostie") {
         player.frenzyEnergy = Math.min(
           FRENZY_MAX_ENERGY,
           player.frenzyEnergy + FRENZY_BOOSTIE_ENERGY,
         );
+        this.addPickupSpark(pickup.tileX, pickup.tileY, 0xfacc15);
       } else {
         player.powerup = pickup.kind;
+        this.addPickupSpark(pickup.tileX, pickup.tileY, powerupColor(pickup.kind));
       }
     }
   }
@@ -765,6 +770,57 @@ export abstract class PlayScene extends Phaser.Scene {
     });
   }
 
+  private addBreakDebris(tileX: number, tileY: number): void {
+    const { x, y } = this.grid.tileToWorldCenter(tileX, tileY);
+    for (let i = 0; i < 5; i++) {
+      const chip = this.add.rectangle(x, y, 5, 5, 0xf8fafc, 0.74);
+      chip.setDepth(29);
+      const angle = -Math.PI / 2 + (i - 2) * 0.42;
+      const distance = 16 + i * 3;
+      this.tweens.add({
+        targets: chip,
+        x: x + Math.cos(angle) * distance,
+        y: y + Math.sin(angle) * distance + 8,
+        alpha: 0,
+        scale: 0.25,
+        angle: 80 - i * 35,
+        duration: 180 + i * 18,
+        ease: "Quad.easeOut",
+        onComplete: () => chip.destroy(),
+      });
+    }
+  }
+
+  private addPickupSpark(tileX: number, tileY: number, color: number): void {
+    const { x, y } = this.grid.tileToWorldCenter(tileX, tileY);
+    const ring = this.add.circle(x, y, 9);
+    ring.setStrokeStyle(3, color, 0.82);
+    ring.setDepth(33);
+    this.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scale: 2.1,
+      duration: 190,
+      ease: "Quad.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+
+    for (let i = 0; i < 4; i++) {
+      const dot = this.add.circle(x, y, 2.5, color, 0.9);
+      dot.setDepth(34);
+      const angle = (Math.PI / 2) * i + 0.35;
+      this.tweens.add({
+        targets: dot,
+        x: x + Math.cos(angle) * 24,
+        y: y + Math.sin(angle) * 24,
+        alpha: 0,
+        duration: 220,
+        ease: "Quad.easeOut",
+        onComplete: () => dot.destroy(),
+      });
+    }
+  }
+
   private addFrenzyTrail(player: PlayPlayer): void {
     const ghost = this.add.image(
       player.x + player.width / 2,
@@ -843,6 +899,7 @@ export abstract class PlayScene extends Phaser.Scene {
       for (const tile of explosion.destroyed) {
         this.redrawTile(tile.tileX, tile.tileY);
         this.addBreakFlash(tile.tileX, tile.tileY);
+        this.addBreakDebris(tile.tileX, tile.tileY);
       }
       this.animateBlockDrops(explosion.drops);
     }
@@ -861,7 +918,16 @@ export abstract class PlayScene extends Phaser.Scene {
   private updatePlayerView(player: PlayPlayer, time: number): void {
     player.view.setPosition(player.x + player.width / 2, player.y + player.height / 2);
     player.body.setFlipX(player.facing < 0);
-    player.body.setScale(player.frenzyActive ? 1.12 : 1);
+    const stunned = player.alive && time < player.stunnedUntil;
+    const moving = player.alive && player.onGround && Math.abs(player.vx) > 24;
+    const stride = moving ? Math.sin(time / 72 + player.slot) * 0.045 : 0;
+    const frenzyScale = player.frenzyActive ? 1.12 : 1;
+    const jumpStretch = !player.onGround && player.alive ? 0.05 : 0;
+    player.body.setScale(frenzyScale * (1 + stride), frenzyScale * (1 - stride + jumpStretch));
+    player.body.setAngle(
+      stunned ? Math.sin(time / 38) * 7 : Phaser.Math.Clamp(player.vx / 42, -6, 6),
+    );
+    player.body.setAlpha(stunned ? 0.72 : 1);
     player.shieldView.setVisible(time < player.shieldUntil);
     if (player.powerup) {
       player.powerIcon.setTexture(textureForPowerup(player.powerup));
@@ -1038,6 +1104,19 @@ function textureForPowerup(kind: Exclude<PickupKind, "gem" | "boostie">): string
       return TEXTURES.stunBolt;
     case "burst":
       return TEXTURES.burst;
+  }
+}
+
+function powerupColor(kind: Exclude<PickupKind, "gem" | "boostie">): number {
+  switch (kind) {
+    case "bomb":
+      return 0xf97316;
+    case "shield":
+      return 0x38bdf8;
+    case "stunBolt":
+      return 0xa78bfa;
+    case "burst":
+      return 0xfacc15;
   }
 }
 

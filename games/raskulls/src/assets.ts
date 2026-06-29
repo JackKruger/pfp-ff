@@ -27,6 +27,24 @@ export const TEXTURES = {
   playerPirat: "raskulls-player-pirat",
 } as const;
 
+type TextureKey = (typeof TEXTURES)[keyof typeof TEXTURES];
+
+const TEXTURE_KEYS = new Set<string>(Object.values(TEXTURES));
+
+export const ART_MANIFEST_KEY = "raskulls-art-manifest";
+export const ART_MANIFEST_URL = "art/manifest.json";
+
+interface RaskullsArtAsset {
+  key: TextureKey;
+  url: string;
+  enabled?: boolean;
+}
+
+interface RaskullsArtManifest {
+  enabled?: boolean;
+  assets?: RaskullsArtAsset[];
+}
+
 export type CharacterVariant = "default" | "king" | "ninja" | "dragon" | "wizard" | "pirat";
 
 const VARIANT_BY_SLOT: CharacterVariant[] = ["king", "ninja", "dragon", "wizard", "pirat", "default"];
@@ -50,6 +68,22 @@ export function textureKeyForVariant(variant: CharacterVariant): string {
     default:
       return TEXTURES.player;
   }
+}
+
+export function queueExternalTextureAssets(scene: Phaser.Scene): boolean {
+  const manifest = scene.cache.json.get(ART_MANIFEST_KEY) as RaskullsArtManifest | undefined;
+  if (!manifest?.enabled || !Array.isArray(manifest.assets)) return false;
+
+  let queued = 0;
+  for (const asset of manifest.assets) {
+    if (!asset.enabled) continue;
+    if (!TEXTURE_KEYS.has(asset.key) || !asset.url) continue;
+    if (scene.textures.exists(asset.key)) continue;
+    scene.load.image(asset.key, asset.url);
+    queued += 1;
+  }
+
+  return queued > 0;
 }
 
 export function createCodeTextures(scene: Phaser.Scene): void {

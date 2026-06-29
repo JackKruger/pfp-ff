@@ -1,0 +1,28 @@
+{
+  "enabled": false,
+  "assets": [
+    { "key": "raskulls-player", "url": "art/player-default.png", "enabled": false },
+    { "key": "raskulls-player-king", "url": "art/player-king.png", "enabled": false },
+    { "key": "raskulls-player-ninja", "url": "art/player-ninja.png", "enabled": false },
+    { "key": "raskulls-player-dragon", "url": "art/player-dragon.png", "enabled": false },
+    { "key": "raskulls-player-wizard", "url": "art/player-wizard.png", "enabled": false },
+    { "key": "raskulls-player-pirat", "url": "art/player-pirat.png", "enabled": false },
+    { "key": "raskulls-dirt", "url": "art/tile-dirt.png", "enabled": false },
+    { "key": "raskulls-stone", "url": "art/tile-stone.png", "enabled": false },
+    { "key": "raskulls-crate", "url": "art/tile-crate.png", "enabled": false },
+    { "key": "raskulls-block-red", "url": "art/tile-red.png", "enabled": false },
+    { "key": "raskulls-block-blue", "url": "art/tile-blue.png", "enabled": false },
+    { "key": "raskulls-block-yellow", "url": "art/tile-yellow.png", "enabled": false },
+    { "key": "raskulls-block-green", "url": "art/tile-green.png", "enabled": false },
+    { "key": "raskulls-block-gray", "url": "art/tile-gray.png", "enabled": false },
+    { "key": "raskulls-gem", "url": "art/pickup-gem.png", "enabled": false },
+    { "key": "raskulls-boostie", "url": "art/pickup-boostie.png", "enabled": false },
+    { "key": "raskulls-dash", "url": "art/power-dash.png", "enabled": false },
+    { "key": "raskulls-bomb", "url": "art/power-bomb.png", "enabled": false },
+    { "key": "raskulls-shield", "url": "art/power-shield.png", "enabled": false },
+    { "key": "raskulls-stun-bolt", "url": "art/power-stun-bolt.png", "enabled": false },
+    { "key": "raskulls-burst", "url": "art/power-burst.png", "enabled": false },
+    { "key": "raskulls-spikes", "url": "art/hazard-spikes.png", "enabled": false },
+    { "key": "raskulls-finish", "url": "art/tile-finish.png", "enabled": false }
+  ]
+}
