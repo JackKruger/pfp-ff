@@ -1,4 +1,10 @@
 import { session } from "../session.js";
+
+const LEVEL_QUIPS: Record<string, string> = {
+  "dig-rush": "Dig Rush: First skull to the bottom wins... probably.",
+  "cliff-climb": "Cliff Climb: Up is the only way out. Mostly.",
+  "gray-gambit": "Gray Gambit: Chain those grays — or let someone else clean up.",
+};
 import { createRaceLevel } from "../systems/levels.js";
 import {
   applyGrandPrixRound,
@@ -25,6 +31,7 @@ export class RaceScene extends PlayScene {
     this.finishX = level.finishX;
     this.timeoutMs = level.timeoutMs;
     this.beginLevel({ grid: level.grid, starts: level.starts, lives: Number.POSITIVE_INFINITY });
+    this.showPreRaceOverlay(level.name, LEVEL_QUIPS[level.id] ?? "Dig fast or dig last.");
   }
 
   override update(time: number, delta: number): void {

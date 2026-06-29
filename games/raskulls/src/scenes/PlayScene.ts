@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { PlayerSlot } from "@pfp/sdk";
-import { TEXTURES } from "../assets.js";
+import { TEXTURES, textureKeyForVariant, variantForSlot } from "../assets.js";
 import { session } from "../session.js";
 import { chooseRaceBotActions } from "../systems/bot.js";
 import { hazardEffectForMode } from "../systems/hazards.js";
@@ -125,6 +125,8 @@ export abstract class PlayScene extends Phaser.Scene {
   private wallStartedAt = 0;
   private ended = false;
   private paused = false;
+  private preRaceOverlay?: Phaser.GameObjects.Container;
+  protected preRaceActive = false;
 
   protected constructor(key: string, mode: RaskullsMode) {
     super(key);
@@ -151,6 +153,10 @@ export abstract class PlayScene extends Phaser.Scene {
 
     this.cameras.main.setBounds(0, 0, this.grid.width * TILE_SIZE, this.grid.height * TILE_SIZE);
     this.cameras.main.setBackgroundColor(this.mode === "race" ? 0x172033 : 0x151826);
+    // Seed camera position to the first start so first frame isn't a long lerp from 0,0
+    const firstStart = setup.starts[0] ?? { x: 64, y: 64 };
+    this.cameraTargetX = firstStart.x;
+    this.cameraTargetY = firstStart.y;
     this.renderTerrain();
     this.hud = this.add.text(18, 16, "", {
       fontFamily: "Segoe UI, sans-serif",
@@ -169,9 +175,21 @@ export abstract class PlayScene extends Phaser.Scene {
     const context = session.context;
     if (!context) return;
 
+    session.input.tick();
+
+    // Pre-race overlay: pause gameplay, allow any button to skip
+    if (this.preRaceActive) {
+      const anyPressed = context.players.some((player) => {
+        const action = session.input.actionsFor(player);
+        return action.justJump || action.justDig || action.justPower || action.justStart;
+      });
+      if (anyPressed) this.dismissPreRaceOverlay();
+      session.input.commit();
+      return;
+    }
+
     const dt = Math.min(delta / 1000, 0.034);
     this.elapsedMs = Math.max(0, time - this.levelStartedAt);
-    session.input.tick();
 
     const actionBySlot = new Map<number, PlayerActions>();
     for (const player of this.players) {
@@ -222,6 +240,53 @@ export abstract class PlayScene extends Phaser.Scene {
 
   protected abstract hudText(): string;
 
+  protected showPreRaceOverlay(levelName: string, flavorText: string): void {
+    this.preRaceActive = true;
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const shade = this.add.rectangle(w / 2, h / 2, w, h, 0x020617, 0.78);
+    shade.setScrollFactor(0);
+    const title = this.add.text(w / 2, h / 2 - 56, levelName, {
+      fontFamily: "Segoe UI, sans-serif",
+      fontSize: "52px",
+      fontStyle: "800",
+      color: "#facc15",
+      stroke: "#111827",
+      strokeThickness: 4,
+    });
+    title.setOrigin(0.5);
+    title.setScrollFactor(0);
+    const flavor = this.add.text(w / 2, h / 2 + 10, flavorText, {
+      fontFamily: "Segoe UI, sans-serif",
+      fontSize: "20px",
+      color: "#e2e8f0",
+      stroke: "#111827",
+      strokeThickness: 3,
+    });
+    flavor.setOrigin(0.5);
+    flavor.setScrollFactor(0);
+    const skip = this.add.text(w / 2, h / 2 + 68, "Press any button to start", {
+      fontFamily: "Segoe UI, sans-serif",
+      fontSize: "15px",
+      color: "#9ca3af",
+    });
+    skip.setOrigin(0.5);
+    skip.setScrollFactor(0);
+    this.preRaceOverlay = this.add.container(0, 0, [shade, title, flavor, skip]);
+    this.preRaceOverlay.setDepth(80);
+    // Auto-dismiss after 1.5 seconds
+    this.time.delayedCall(1500, () => this.dismissPreRaceOverlay());
+  }
+
+  protected dismissPreRaceOverlay(): void {
+    if (!this.preRaceActive) return;
+    this.preRaceActive = false;
+    this.preRaceOverlay?.destroy(true);
+    this.preRaceOverlay = undefined;
+    this.levelStartedAt = this.time.now;
+    this.wallStartedAt = Date.now();
+  }
+
   protected canDig(_player: PlayPlayer): boolean {
     return true;
   }
@@ -236,7 +301,9 @@ export abstract class PlayScene extends Phaser.Scene {
 
   private createPlayer(slot: PlayerSlot, lives: number): PlayPlayer {
     const start = this.starts[slot.slot] ?? this.starts[0] ?? { x: 64, y: 64 };
-    const body = this.add.image(0, 0, TEXTURES.player);
+    const variant = variantForSlot(slot.slot);
+    const playerTexture = textureKeyForVariant(variant);
+    const body = this.add.image(0, 0, playerTexture);
     body.setTint(Phaser.Display.Color.HexStringToColor(slot.color).color);
     const shieldView = this.add.ellipse(0, 0, 40, 46);
     shieldView.setStrokeStyle(3, 0x7dd3fc, 0.85);
@@ -624,24 +691,46 @@ export abstract class PlayScene extends Phaser.Scene {
         const b = this.players[j]!;
         if (!a.alive || !b.alive || a.finished || b.finished) continue;
         if (!rectsOverlap(playerRect(a), playerRect(b))) continue;
-        this.resolveHit(a, b, time);
-        this.resolveHit(b, a, time);
+        // Try each player as "attacker" — frenzy player shoves the other.
+        // Regular overlap is handled once inside resolveHit when neither is in frenzy.
+        const aFrenzy = a.frenzyActive;
+        const bFrenzy = b.frenzyActive;
+        if (aFrenzy || bFrenzy) {
+          if (aFrenzy) this.resolveHit(a, b, time);
+          if (bFrenzy) this.resolveHit(b, a, time);
+        } else {
+          // Neither in frenzy: simple separation (run once)
+          this.resolveHit(a, b, time);
+        }
       }
     }
   }
 
   private resolveHit(attacker: PlayPlayer, victim: PlayPlayer, time: number): void {
-    if (!attacker.frenzyActive || time < victim.shieldUntil) {
-      const direction = attacker.x < victim.x ? -1 : 1;
-      attacker.vx = direction * this.tuning.overlapKnockbackX;
-      victim.vx = -direction * this.tuning.overlapKnockbackX;
+    const direction = attacker.x < victim.x ? -1 : 1;
+
+    // Frenzy shove blocked by shield: reflect the attacker back
+    if (attacker.frenzyActive && time < victim.shieldUntil) {
+      attacker.vx = -attacker.facing * this.tuning.frenzyHitKnockbackX * 0.55;
+      attacker.vy = Math.min(attacker.vy, -this.tuning.frenzyHitKnockbackY * 0.45);
+      // Visual shield pulse
+      victim.shieldView.setScale(1.18);
+      this.tweens.add({ targets: victim.shieldView, scale: 1, duration: 130 });
       return;
     }
 
-    victim.lastHitBy = attacker.slot;
-    victim.stunnedUntil = time + this.tuning.frenzyHitStunMs;
-    victim.vx = attacker.facing * this.tuning.frenzyHitKnockbackX;
-    victim.vy = -this.tuning.frenzyHitKnockbackY;
+    // Frenzy shove hits unshielded victim
+    if (attacker.frenzyActive) {
+      victim.lastHitBy = attacker.slot;
+      victim.stunnedUntil = time + this.tuning.frenzyHitStunMs;
+      victim.vx = attacker.facing * this.tuning.frenzyHitKnockbackX;
+      victim.vy = -this.tuning.frenzyHitKnockbackY;
+      return;
+    }
+
+    // Regular body overlap: small bounce-apart, no stun
+    attacker.vx = direction * this.tuning.overlapKnockbackX;
+    victim.vx = -direction * this.tuning.overlapKnockbackX;
   }
 
   private renderTerrain(): void {
@@ -680,7 +769,7 @@ export abstract class PlayScene extends Phaser.Scene {
     const ghost = this.add.image(
       player.x + player.width / 2,
       player.y + player.height / 2,
-      TEXTURES.player,
+      textureKeyForVariant(variantForSlot(player.slot)),
     );
     ghost.setTint(Phaser.Display.Color.HexStringToColor(player.color).color);
     ghost.setFlipX(player.facing < 0);
@@ -783,10 +872,17 @@ export abstract class PlayScene extends Phaser.Scene {
     player.label.setText(player.lives > 0 ? player.displayName : `${player.displayName} OUT`);
   }
 
+  private cameraTargetX = 0;
+  private cameraTargetY = 0;
+  private readonly cameraLerpFactor = 0.08;
+
   private updateCamera(): void {
+    // Exclude finished players from bounding box so camera tracks active racers
     const active = this.players.filter((player) => player.alive && !player.finished);
-    const targets = active.length > 0 ? active : this.players;
-    const centers = targets.map((player) => ({
+    const targets = active.length > 0 ? active : this.players.filter((p) => !p.finished);
+    const pool = targets.length > 0 ? targets : this.players;
+
+    const centers = pool.map((player) => ({
       x: player.x + player.width / 2,
       y: player.y + player.height / 2,
     }));
@@ -794,16 +890,38 @@ export abstract class PlayScene extends Phaser.Scene {
     const maxX = Math.max(...centers.map((point) => point.x));
     const minY = Math.min(...centers.map((point) => point.y));
     const maxY = Math.max(...centers.map((point) => point.y));
+
+    const spreadTiles = Math.max(maxX - minX, maxY - minY) / TILE_SIZE;
+    const centroidX = (minX + maxX) / 2;
+    const centroidY = (minY + maxY) / 2;
+
+    // If all active players are within 8 tiles, center on centroid; otherwise bounding box
+    let targetX: number;
+    let targetY: number;
+    if (spreadTiles <= 8) {
+      targetX = centroidX;
+      targetY = centroidY;
+    } else {
+      targetX = centroidX;
+      targetY = centroidY;
+    }
+
+    // Smooth lerp to target position
+    this.cameraTargetX = Phaser.Math.Linear(this.cameraTargetX, targetX, this.cameraLerpFactor);
+    this.cameraTargetY = Phaser.Math.Linear(this.cameraTargetY, targetY, this.cameraLerpFactor);
+
     const spanX = Math.max(420, maxX - minX + 260);
     const spanY = Math.max(260, maxY - minY + 190);
+    const minZoom = this.mode === "race" ? 0.45 : 0.45;
+    const maxZoom = 1.0;
     const zoom = Phaser.Math.Clamp(
       Math.min(this.scale.width / spanX, this.scale.height / spanY),
-      this.mode === "race" ? 0.55 : 0.72,
-      1.25,
+      minZoom,
+      maxZoom,
     );
     const camera = this.cameras.main;
-    camera.zoom = Phaser.Math.Linear(camera.zoom, zoom, 0.08);
-    camera.centerOn((minX + maxX) / 2, (minY + maxY) / 2);
+    camera.zoom = Phaser.Math.Linear(camera.zoom, zoom, this.cameraLerpFactor);
+    camera.centerOn(this.cameraTargetX, this.cameraTargetY);
   }
 
   private updateHud(): void {
