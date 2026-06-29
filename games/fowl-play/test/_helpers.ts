@@ -33,6 +33,9 @@ export function buildTestState(overrides: Partial<GameState> = {}): GameState {
     nextUid: 1,
     startedAt: 0,
     showLookAroundHint: false,
+    suddenDeath: false,
+    pendingHandSeed: 0,
+    finalConfettiAcc: 0,
     ...overrides,
   };
 }

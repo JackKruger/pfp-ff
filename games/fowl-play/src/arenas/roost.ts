@@ -38,5 +38,19 @@ export const ROOST: Arena = {
     { x: 128, y: 480, r: 64 },
     { x: 1608, y: 248, r: 64 },
   ],
+  dynamics: [
+    // A hawk circling the middle of the sky, slashing horizontally between the
+    // central sky islands. Forces a commitment to the high or low route.
+    {
+      kind: "sweeper",
+      x1: 320,
+      y1: 200,
+      x2: 1380,
+      y2: 200,
+      w: 36,
+      h: 18,
+      periodMs: 6000,
+    },
+  ],
   bg: { top: "#0c4a6e", bottom: "#020617" },
 };

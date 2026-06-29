@@ -7,7 +7,9 @@ import {
   PLACEMENT_MS,
   RACE_COUNTDOWN_MS,
   RACE_MAX_MS,
+  ROUND_LOOK_MS,
   SCORE_MS,
+  SUDDEN_DEATH_LOOK_MS,
   WIN_SCORE,
 } from "../src/constants.js";
 import { advance, createGame } from "../src/game.js";
@@ -155,12 +157,20 @@ describe("advance FSM", () => {
     advance(state, pump(state), SCORE_MS + 16);
 
     expect(state.round).toBe(2);
-    expect(state.phase).toBe("placement");
+    // Between rounds we now go through a short look-around intro before
+    // returning to placement, so the next phase is "intro" not "placement".
+    expect(state.phase).toBe("intro");
+    expect(state.phaseTimer).toBe(ROUND_LOOK_MS);
+    expect(state.suddenDeath).toBe(false);
     // Same map for the whole match.
     expect(state.arena.id).toBe(arenaBefore);
     // Player piece persists; the arena's scorers are respawned.
     expect(state.pieces.some((p) => p.placedBy === 0 && p.pieceId === "block")).toBe(true);
     expect(state.pieces.some((p) => p.placedBy === -1)).toBe(true);
+
+    // …and once the round-look intro elapses, placement begins as before.
+    advance(state, pump(state), ROUND_LOOK_MS + 1);
+    expect(state.phase).toBe("placement");
   });
 
   it("score → final when a clear winner has WIN_SCORE", () => {
@@ -181,7 +191,7 @@ describe("advance FSM", () => {
     expect(state.phaseTimer).toBe(FINAL_HOLD_MS);
   });
 
-  it("tied at WIN_SCORE does not end the match — another round runs", () => {
+  it("tied at WIN_SCORE enters sudden death and skips placement", () => {
     const state = createGame(launch(2));
     confirmLevel(state);
     advance(state, pump(state), LOOK_AROUND_MS + 1);
@@ -193,10 +203,56 @@ describe("advance FSM", () => {
     state.actors[1].y = state.arena.killLineY + 100;
     advance(state, pump(state), 16);
     advance(state, pump(state), SCORE_MS + 16);
-    expect(state.phase).toBe("placement"); // looped, not finalized
+    // Tie at threshold → sudden-death intro, not placement.
+    expect(state.suddenDeath).toBe(true);
+    expect(state.phase).toBe("intro");
+    expect(state.phaseTimer).toBe(SUDDEN_DEATH_LOOK_MS);
+    // Once the look-around clears, we go straight to race (no placement).
+    advance(state, pump(state), SUDDEN_DEATH_LOOK_MS + 1);
+    expect(state.phase).toBe("race");
+    // Actors were spawned without re-entering placement.
+    expect(state.actors.length).toBe(state.players.length);
   });
 
-  it("final returns true once FINAL_HOLD_MS elapses", () => {
+  it("sudden death resolves to final when one player breaks the tie", () => {
+    const state = createGame(launch(2));
+    confirmLevel(state);
+    advance(state, pump(state), LOOK_AROUND_MS + 1);
+    state.players[0].score.finalScore = WIN_SCORE;
+    state.players[1].score.finalScore = WIN_SCORE;
+    // Run a round that ties to enter sudden death.
+    advance(state, pump(state, { startDown: true }), 16);
+    advance(state, pump(state), RACE_COUNTDOWN_MS + 1);
+    state.actors[0].y = state.arena.killLineY + 100;
+    state.actors[1].y = state.arena.killLineY + 100;
+    advance(state, pump(state), 16);
+    advance(state, pump(state), SCORE_MS + 16);
+    expect(state.suddenDeath).toBe(true);
+    // Walk into the SD race.
+    advance(state, pump(state), SUDDEN_DEATH_LOOK_MS + 1);
+    expect(state.phase).toBe("race");
+    advance(state, pump(state), RACE_COUNTDOWN_MS + 1);
+    // One player finishes; the other dies, breaking the tie.
+    state.actors[0].x = state.arena.goal.x + 8;
+    state.actors[0].y = state.arena.goal.y + 8;
+    state.actors[1].y = state.arena.killLineY + 100;
+    advance(state, pump(state), 16);
+    expect(state.phase).toBe("score");
+    advance(state, pump(state), SCORE_MS + 16);
+    expect(state.phase).toBe("final");
+  });
+
+  it("final returns true once FINAL_HOLD_MS elapses past the grace window", () => {
+    const state = createGame(launch(2));
+    state.phase = "final";
+    state.phaseTimer = FINAL_HOLD_MS;
+    // First 1.5s is a grace window: confirm presses are ignored.
+    expect(advance(state, pump(state, { confirmDown: true }), 100)).toBe(false);
+    // Past the grace window, an A press skips out immediately.
+    expect(advance(state, pump(state, { confirmDown: true }), 1600)).toBe(true);
+  });
+
+  it("final returns true after the full hold even without an input", () => {
     const state = createGame(launch(2));
     state.phase = "final";
     state.phaseTimer = FINAL_HOLD_MS;

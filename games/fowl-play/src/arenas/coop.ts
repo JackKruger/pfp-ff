@@ -45,5 +45,20 @@ export const COOP: Arena = {
     { x: 112, y: 720, r: 64 },
     { x: 1128, y: 112, r: 64 },
   ],
+  dynamics: [
+    // A patrolling rat scurrying horizontally along the upper corridor — the
+    // path most players take to the goal. The drop-throughs become an
+    // emergency exit when it's coming for you.
+    {
+      kind: "sweeper",
+      x1: 160,
+      y1: 256,
+      x2: 1040,
+      y2: 256,
+      w: 28,
+      h: 16,
+      periodMs: 4800,
+    },
+  ],
   bg: { top: "#451a03", bottom: "#0a0a0a" },
 };

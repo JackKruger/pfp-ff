@@ -46,6 +46,9 @@ function makeState(): GameState {
     nextUid: 1,
     startedAt: 0,
     showLookAroundHint: false,
+    suddenDeath: false,
+    pendingHandSeed: 0,
+    finalConfettiAcc: 0,
   };
 }
 

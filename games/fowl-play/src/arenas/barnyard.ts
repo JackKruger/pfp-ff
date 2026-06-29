@@ -34,5 +34,19 @@ export const BARNYARD: Arena = {
     { x: 64, y: 560, r: 64 },
     { x: 1848, y: 568, r: 64 },
   ],
+  dynamics: [
+    // A tumbleweed-style sweeper that rolls across the floor gap in the middle,
+    // forcing a clean read of its timing before committing to the dash.
+    {
+      kind: "sweeper",
+      x1: 360,
+      y1: 624,
+      x2: 1400,
+      y2: 624,
+      w: 32,
+      h: 32,
+      periodMs: 5200,
+    },
+  ],
   bg: { top: "#fde68a", bottom: "#92400e" },
 };

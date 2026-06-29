@@ -35,5 +35,20 @@ export const SILO: Arena = {
     { x: 360, y: 1320, r: 64 },
     { x: 368, y: 112, r: 64 },
   ],
+  dynamics: [
+    // A grain elevator: a lethal block riding up and down through the silo's
+    // central column. Telegraph rail nudges climbers to hop sideways when it
+    // comes through their lane.
+    {
+      kind: "sweeper",
+      x1: 360,
+      y1: 1250,
+      x2: 360,
+      y2: 320,
+      w: 48,
+      h: 24,
+      periodMs: 6400,
+    },
+  ],
   bg: { top: "#1e293b", bottom: "#0c1322" },
 };

@@ -1,9 +1,12 @@
 import type { LaunchContext } from "@pfp/sdk";
 import {
+  FINAL_CONFETTI_MS,
   FINAL_HOLD_MS,
   HAND_SIZE,
   LOOK_AROUND_MS,
   RACE_COUNTDOWN_MS,
+  ROUND_LOOK_MS,
+  SUDDEN_DEATH_LOOK_MS,
   WIN_SCORE,
 } from "./constants.js";
 import { ARENAS } from "./arenas/index.js";
@@ -14,6 +17,7 @@ import {
   countdownRemainingMs,
   finalizeRound,
   tickRace,
+  emitConfetti,
 } from "./phases/race.js";
 import { beginScore, computeStandings, matchIsOver, tickScore } from "./phases/score.js";
 import {
@@ -54,6 +58,9 @@ export function createGame(launch: LaunchContext): GameState {
     nextUid: 1,
     startedAt: Date.now(),
     showLookAroundHint: true,
+    suddenDeath: false,
+    pendingHandSeed: Date.now() & 0x7fffffff,
+    finalConfettiAcc: 0,
   };
 
   // Players pick the arena before round 1; scorers are seeded once they confirm.
@@ -98,6 +105,7 @@ export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): 
         state.phase = "intro";
         state.phaseTimer = LOOK_AROUND_MS;
         state.showLookAroundHint = true;
+        state.pendingHandSeed = Date.now() & 0x7fffffff;
         state.soundEvents.push("go");
       }
       return false;
@@ -106,7 +114,12 @@ export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): 
     case "intro": {
       state.phaseTimer = Math.max(0, state.phaseTimer - dtMs);
       if (state.phaseTimer <= 0) {
-        beginPlacement(state, Date.now() & 0x7fffffff);
+        if (state.suddenDeath) {
+          // Tie at the win threshold — skip placement; race on the existing board.
+          beginRace(state);
+        } else {
+          beginPlacement(state, state.pendingHandSeed);
+        }
         state.showLookAroundHint = false;
       }
       return false;
@@ -147,9 +160,7 @@ export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): 
       const done = tickScore(state, dtMs);
       if (!done) return false;
       if (matchIsOver(state) && hasClearWinner(state)) {
-        state.phase = "final";
-        state.phaseTimer = FINAL_HOLD_MS;
-        state.soundEvents.push("win");
+        beginFinal(state);
         return false;
       }
       // Next round — UCH-style: stay on the same arena and keep every
@@ -158,15 +169,63 @@ export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): 
       state.round++;
       state.pieces = state.pieces.filter((p) => p.placedBy !== -1);
       seedArenaScorers(state);
-      beginPlacement(state, (Date.now() + state.round) & 0x7fffffff);
+
+      // Detect / latch sudden death: someone hit the win score but a tie
+      // prevented a clean finish. Skip placement and run no-place races until
+      // the tie breaks. Otherwise insert a short look-around before placement.
+      if (matchIsOver(state)) state.suddenDeath = true;
+      state.phase = "intro";
+      state.phaseTimer = state.suddenDeath ? SUDDEN_DEATH_LOOK_MS : ROUND_LOOK_MS;
+      state.pendingHandSeed = (Date.now() + state.round) & 0x7fffffff;
+      state.showLookAroundHint = false;
       return false;
     }
 
     case "final": {
       state.phaseTimer = Math.max(0, state.phaseTimer - dtMs);
-      return state.phaseTimer <= 0;
+      tickFinalCelebration(state, dtMs);
+      // First 1.5s of the celebration is "locked" so a held A press from the
+      // last round can't insta-skip the winner reveal. After that, either the
+      // timer expires or any player taps A to continue.
+      const inGrace = state.phaseTimer > FINAL_HOLD_MS - 1500;
+      if (inGrace) return false;
+      const skipPressed = frames.some((f) => f.confirmDown);
+      return state.phaseTimer <= 0 || skipPressed;
     }
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Final phase                                                               */
+/* -------------------------------------------------------------------------- */
+
+function beginFinal(state: GameState): void {
+  state.phase = "final";
+  state.phaseTimer = FINAL_HOLD_MS;
+  state.soundEvents.push("win");
+  state.toasts = [];
+  state.particles = [];
+  state.floats = [];
+  state.finalConfettiAcc = 0;
+  // Burst on entry so the celebration starts feeling alive without a pause.
+  emitConfetti(state, 28);
+}
+
+function tickFinalCelebration(state: GameState, dtMs: number): void {
+  state.finalConfettiAcc += dtMs;
+  while (state.finalConfettiAcc >= FINAL_CONFETTI_MS) {
+    emitConfetti(state, 6);
+    state.finalConfettiAcc -= FINAL_CONFETTI_MS;
+  }
+  // Drain VFX in-place so confetti still falls and fades.
+  const dtSec = dtMs / 1000;
+  for (const p of state.particles) {
+    p.life -= dtMs;
+    p.vy += 600 * dtSec;
+    p.x += p.vx * dtSec;
+    p.y += p.vy * dtSec;
+  }
+  state.particles = state.particles.filter((p) => p.life > 0);
 }
 
 /**

@@ -1,6 +1,6 @@
 import { LOGICAL_H, LOGICAL_W, PLAYER_H, PLAYER_W } from "../constants.js";
 import { ghostFor, probePlacement } from "../phases/placement.js";
-import { bladeTip, raceElapsedMs } from "../phases/race.js";
+import { bladeTip, raceElapsedMs, sweeperCenter } from "../phases/race.js";
 import { pieceAabb, PIECES } from "../pieces/registry.js";
 import { ARENAS } from "../arenas/index.js";
 import type { GameState } from "../types.js";
@@ -513,26 +513,45 @@ export class Renderer {
     if (!dyns?.length) return;
     const elapsed = raceElapsedMs(state);
     for (const d of dyns) {
-      if (d.kind !== "blade") continue;
-      const tip = bladeTip(d, elapsed);
-      // Arm
-      this.ctx.strokeStyle = "#7f1d1d";
-      this.ctx.lineWidth = d.thickness;
-      this.ctx.lineCap = "round";
-      this.ctx.beginPath();
-      this.ctx.moveTo(d.pivotX, d.pivotY);
-      this.ctx.lineTo(tip.x, tip.y);
-      this.ctx.stroke();
-      // Pivot bolt
-      this.ctx.fillStyle = "#1f2937";
-      this.ctx.beginPath();
-      this.ctx.arc(d.pivotX, d.pivotY, d.thickness, 0, Math.PI * 2);
-      this.ctx.fill();
-      // Tip marker
-      this.ctx.fillStyle = "#ef4444";
-      this.ctx.beginPath();
-      this.ctx.arc(tip.x, tip.y, d.thickness * 0.7, 0, Math.PI * 2);
-      this.ctx.fill();
+      if (d.kind === "blade") {
+        const tip = bladeTip(d, elapsed);
+        // Arm
+        this.ctx.strokeStyle = "#7f1d1d";
+        this.ctx.lineWidth = d.thickness;
+        this.ctx.lineCap = "round";
+        this.ctx.beginPath();
+        this.ctx.moveTo(d.pivotX, d.pivotY);
+        this.ctx.lineTo(tip.x, tip.y);
+        this.ctx.stroke();
+        // Pivot bolt
+        this.ctx.fillStyle = "#1f2937";
+        this.ctx.beginPath();
+        this.ctx.arc(d.pivotX, d.pivotY, d.thickness, 0, Math.PI * 2);
+        this.ctx.fill();
+        // Tip marker
+        this.ctx.fillStyle = "#ef4444";
+        this.ctx.beginPath();
+        this.ctx.arc(tip.x, tip.y, d.thickness * 0.7, 0, Math.PI * 2);
+        this.ctx.fill();
+      } else if (d.kind === "sweeper") {
+        // Faint guide rail so players can read the path before the sweeper
+        // arrives — UCH-style telegraphing.
+        this.ctx.strokeStyle = "rgba(127,29,29,0.35)";
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([6, 6]);
+        this.ctx.beginPath();
+        this.ctx.moveTo(d.x1, d.y1);
+        this.ctx.lineTo(d.x2, d.y2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+
+        const c = sweeperCenter(d, elapsed);
+        this.ctx.fillStyle = "#7f1d1d";
+        this.ctx.fillRect(c.x - d.w / 2, c.y - d.h / 2, d.w, d.h);
+        this.ctx.strokeStyle = "#ef4444";
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(c.x - d.w / 2, c.y - d.h / 2, d.w, d.h);
+      }
     }
     this.ctx.lineCap = "butt";
   }
