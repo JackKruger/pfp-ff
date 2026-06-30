@@ -128,6 +128,13 @@ export function tickRace(
 
 const TRAIL_MAX = 10;
 
+/**
+ * Tolerance (px) added around the actor's AABB when probing for piece contact
+ * effects. Must exceed the sub-pixel SLOP gap collision resolution leaves above
+ * a landed surface, so on-top pad effects (bouncy/trampoline/conveyor) fire.
+ */
+const CONTACT_PROBE = 1.5;
+
 function sampleTrails(state: GameState): void {
   for (const actor of state.actors) {
     if (!actor.alive || actor.finished) continue;
@@ -331,6 +338,16 @@ function resolveContacts(state: GameState, dtMs: number): void {
   for (const actor of state.actors) {
     if (!actor.alive || actor.finished) continue;
     const bounds: Aabb = { x: actor.x, y: actor.y, w: PLAYER_W, h: PLAYER_H };
+    // Collision resolution rests the actor a hair (SLOP) above any solid it
+    // lands on, so a strict overlap test misses the "standing on top" case that
+    // bouncy / trampoline / conveyor (solid pads) rely on. Probe with a slightly
+    // inflated AABB so those on-contact effects fire when the actor is resting.
+    const contactBounds: Aabb = {
+      x: actor.x - CONTACT_PROBE,
+      y: actor.y - CONTACT_PROBE,
+      w: PLAYER_W + CONTACT_PROBE * 2,
+      h: PLAYER_H + CONTACT_PROBE * 2,
+    };
 
     // Kill line
     if (actor.y >= state.arena.killLineY) {
@@ -342,7 +359,7 @@ function resolveContacts(state: GameState, dtMs: number): void {
     for (const piece of state.pieces) {
       const def = PIECES[piece.pieceId];
       const aabb = pieceAabb(piece);
-      if (!overlaps(bounds, aabb)) continue;
+      if (!overlaps(contactBounds, aabb)) continue;
 
       switch (piece.pieceId) {
         case "coin":

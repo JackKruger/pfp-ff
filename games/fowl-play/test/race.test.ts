@@ -297,6 +297,29 @@ describe("bouncy + trampoline", () => {
     tickRace(state, pumpFrames(state), 16);
     expect(state.actors[0].vy).toBeLessThanOrEqual(-500);
   });
+
+  it("bounces an actor that falls naturally and rests on the pad", () => {
+    // Regression: a solid pad rests the actor a hair above its surface after
+    // collision resolution, so a strict overlap test would miss the contact and
+    // never bounce. Drop the actor from above and let physics land it.
+    const players = [makePlayer(0)];
+    const bouncy = makePlaced(1, "bouncy", 200, 224, 0, 1); // sits on the floor
+    const state = makeState(players, [bouncy]);
+    beginRace(state);
+    tickRace(state, pumpFrames(state), RACE_COUNTDOWN_MS + 1);
+    state.actors[0].x = 205;
+    state.actors[0].y = 150;
+    state.actors[0].vx = 0;
+    state.actors[0].vy = 0;
+    state.actors[0].contact = "none";
+
+    let bounced = false;
+    for (let i = 0; i < 120; i++) {
+      tickRace(state, pumpFrames(state), 16);
+      if (state.actors[0].vy <= -300) bounced = true;
+    }
+    expect(bounced).toBe(true);
+  });
 });
 
 describe("round end conditions", () => {
