@@ -109,6 +109,9 @@ importers:
 
   games/raskulls:
     dependencies:
+      '@pfp/game-kit':
+        specifier: workspace:*
+        version: link:../../packages/game-kit
       '@pfp/input':
         specifier: workspace:*
         version: link:../../packages/input
@@ -180,6 +183,8 @@ importers:
       fake-indexeddb:
         specifier: ^6.0.0
         version: 6.2.5
+
+  packages/game-kit: {}
 
   packages/input: {}
 

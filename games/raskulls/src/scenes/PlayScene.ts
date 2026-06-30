@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { PlayerSlot } from "@pfp/sdk";
+import { computeSplitLayout } from "@pfp/game-kit";
 import { TEXTURES, textureKeyForVariant, variantForSlot } from "../assets.js";
 import { session } from "../session.js";
 import { chooseRaceBotActions } from "../systems/bot.js";
@@ -26,6 +27,19 @@ const STUN_BOLT_LANE_HEIGHT = 92;
 const STUN_BOLT_STUN_MS = 700;
 const STUN_BOLT_FRENZY_DRAIN = 24;
 const BURST_RADIUS_TILES = 1;
+
+// Split-screen: each human player gets their own camera pane once 2+ humans play.
+const SPLIT_DIVIDER_COLOR = 0x0b1120;
+const SPLIT_DIVIDER_THICKNESS = 4;
+// Target visible world width per pane (in tiles) used to pick a per-pane zoom.
+const SPLIT_TARGET_TILES = 18;
+
+interface PaneCamera {
+  camera: Phaser.Cameras.Scene2D.Camera;
+  slot: number;
+  targetX: number;
+  targetY: number;
+}
 
 interface ModeTuning {
   runSpeed: number;
@@ -128,9 +142,34 @@ export abstract class PlayScene extends Phaser.Scene {
   private preRaceOverlay?: Phaser.GameObjects.Container;
   protected preRaceActive = false;
 
+  // Split-screen plumbing. World objects go in worldLayer, shell/HUD overlays in
+  // uiLayer. With 2+ humans each pane camera renders only the world and ignores
+  // uiLayer, while a full-screen uiCamera renders only the overlays.
+  private worldLayer?: Phaser.GameObjects.Layer;
+  private uiLayer?: Phaser.GameObjects.Layer;
+  private paneCams: PaneCamera[] = [];
+  private uiCamera?: Phaser.Cameras.Scene2D.Camera;
+  private vDivider?: Phaser.GameObjects.Rectangle;
+  private hDivider?: Phaser.GameObjects.Rectangle;
+  private splitActive = false;
+
   protected constructor(key: string, mode: RaskullsMode) {
     super(key);
     this.mode = mode;
+  }
+
+  /** Track a world object so the UI camera excludes it (current and future). */
+  private world<T extends Phaser.GameObjects.GameObject>(obj: T): T {
+    this.worldLayer?.add(obj);
+    if (this.uiCamera) obj.cameraFilter |= this.uiCamera.id;
+    return obj;
+  }
+
+  /** Track an overlay object so every pane camera excludes it. */
+  private ui<T extends Phaser.GameObjects.GameObject>(obj: T): T {
+    this.uiLayer?.add(obj);
+    for (const pane of this.paneCams) obj.cameraFilter |= pane.camera.id;
+    return obj;
   }
 
   protected beginLevel(setup: LevelSetup): void {
@@ -142,6 +181,10 @@ export abstract class PlayScene extends Phaser.Scene {
 
     this.grid = setup.grid;
     this.starts = setup.starts;
+    // World objects below depth 1000; overlays above so single-camera mode stacks
+    // UI on top, and split mode can grab each group by layer.
+    this.worldLayer = this.add.layer().setDepth(0);
+    this.uiLayer = this.add.layer().setDepth(1000);
     const fillRaceBots = context.settings.raceBots !== false;
     const playerSlots =
       this.mode === "race" && fillRaceBots ? withRaceBots(context.players) : context.players;
@@ -151,22 +194,106 @@ export abstract class PlayScene extends Phaser.Scene {
     this.ended = false;
     this.paused = false;
 
-    this.cameras.main.setBounds(0, 0, this.grid.width * TILE_SIZE, this.grid.height * TILE_SIZE);
-    this.cameras.main.setBackgroundColor(this.mode === "race" ? 0x172033 : 0x151826);
-    // Seed camera position to the first start so first frame isn't a long lerp from 0,0
+    // Seed shared-camera position to the first start so the first frame isn't a
+    // long lerp from 0,0 (used by the single-camera path).
     const firstStart = setup.starts[0] ?? { x: 64, y: 64 };
     this.cameraTargetX = firstStart.x;
     this.cameraTargetY = firstStart.y;
     this.renderTerrain();
-    this.hud = this.add.text(18, 16, "", {
-      fontFamily: "Segoe UI, sans-serif",
-      fontSize: "16px",
-      color: "#f8fafc",
-      backgroundColor: "rgba(15, 23, 42, 0.62)",
-      padding: { x: 10, y: 8 },
-    });
+    this.hud = this.ui(
+      this.add.text(18, 16, "", {
+        fontFamily: "Segoe UI, sans-serif",
+        fontSize: "16px",
+        color: "#f8fafc",
+        backgroundColor: "rgba(15, 23, 42, 0.62)",
+        padding: { x: 10, y: 8 },
+      }),
+    );
     this.hud.setScrollFactor(0);
     this.hud.setDepth(50);
+
+    this.setupCameras();
+  }
+
+  /**
+   * Configure cameras for the current roster. One human (plus any bots) keeps a
+   * single shared rubber-band camera. Two-to-four humans each get a split-screen
+   * pane that follows their own player, with a full-screen UI camera drawing the
+   * shared HUD/overlays once.
+   */
+  private setupCameras(): void {
+    const worldW = this.grid.width * TILE_SIZE;
+    const worldH = this.grid.height * TILE_SIZE;
+    const bg = this.mode === "race" ? 0x172033 : 0x151826;
+
+    // Reset any cameras/dividers left over from a previous level setup.
+    for (const cam of [...this.cameras.cameras]) {
+      if (cam !== this.cameras.main) this.cameras.remove(cam);
+    }
+    this.paneCams = [];
+    this.uiCamera = undefined;
+    this.vDivider?.destroy();
+    this.hDivider?.destroy();
+    this.vDivider = undefined;
+    this.hDivider = undefined;
+
+    const humans = this.players.filter((player) => !player.bot);
+    this.splitActive = humans.length >= 2;
+
+    const fullW = this.scale.width;
+    const fullH = this.scale.height;
+
+    if (!this.splitActive) {
+      const cam = this.cameras.main;
+      cam.setViewport(0, 0, fullW, fullH);
+      cam.setBounds(0, 0, worldW, worldH);
+      cam.setBackgroundColor(bg);
+      const focus = humans[0] ?? this.players[0];
+      if (focus) {
+        this.cameraTargetX = focus.x + focus.width / 2;
+        this.cameraTargetY = focus.y + focus.height / 2;
+      }
+      return;
+    }
+
+    const panes = computeSplitLayout(humans.length, { width: fullW, height: fullH });
+    panes.forEach((pane) => {
+      const human = humans[pane.index];
+      const cam = pane.index === 0 ? this.cameras.main : this.cameras.add();
+      cam.setViewport(pane.x, pane.y, pane.width, pane.height);
+      cam.setBounds(0, 0, worldW, worldH);
+      cam.setBackgroundColor(bg);
+      cam.ignore(this.uiLayer!);
+      this.paneCams.push({
+        camera: cam,
+        slot: human.slot,
+        targetX: human.x + human.width / 2,
+        targetY: human.y + human.height / 2,
+      });
+    });
+
+    // Full-screen camera that draws only the overlays, added last so it renders
+    // on top of every pane.
+    const uiCamera = this.cameras.add(0, 0, fullW, fullH);
+    uiCamera.setBackgroundColor("rgba(0,0,0,0)");
+    uiCamera.ignore(this.worldLayer!);
+    this.uiCamera = uiCamera;
+
+    // Stamp the UI-camera filter onto existing world objects (the layer ignore
+    // above only catches current children; future ones go through this.world()).
+    this.worldLayer!.getChildren().forEach((child) => {
+      child.cameraFilter |= uiCamera.id;
+    });
+
+    this.vDivider = this.ui(
+      this.add.rectangle(0, 0, SPLIT_DIVIDER_THICKNESS, fullH, SPLIT_DIVIDER_COLOR, 0.9),
+    );
+    this.vDivider.setScrollFactor(0).setDepth(60);
+    this.hDivider = this.ui(
+      this.add.rectangle(0, 0, fullW, SPLIT_DIVIDER_THICKNESS, SPLIT_DIVIDER_COLOR, 0.9),
+    );
+    this.hDivider.setScrollFactor(0).setDepth(60);
+    this.layoutDividers(fullW, fullH);
   }
 
   protected updatePlay(time: number, delta: number): void {
@@ -272,7 +399,7 @@ export abstract class PlayScene extends Phaser.Scene {
     });
     skip.setOrigin(0.5);
     skip.setScrollFactor(0);
-    this.preRaceOverlay = this.add.container(0, 0, [shade, title, flavor, skip]);
+    this.preRaceOverlay = this.ui(this.add.container(0, 0, [shade, title, flavor, skip]));
     this.preRaceOverlay.setDepth(80);
     // Auto-dismiss after 1.5 seconds
     this.time.delayedCall(1500, () => this.dismissPreRaceOverlay());
@@ -321,7 +448,9 @@ export abstract class PlayScene extends Phaser.Scene {
     powerIcon.setScale(0.72);
     powerIcon.setVisible(false);
 
-    const view = this.add.container(start.x, start.y, [shieldView, body, label, powerIcon]);
+    const view = this.world(
+      this.add.container(start.x, start.y, [shieldView, body, label, powerIcon]),
+    );
     view.setDepth(20);
 
     return {
@@ -524,7 +653,7 @@ export abstract class PlayScene extends Phaser.Scene {
     );
 
     const { x, y } = this.grid.tileToWorldCenter(center.tileX, center.tileY);
-    const ring = this.add.circle(x, y, TILE_SIZE * 1.6);
+    const ring = this.world(this.add.circle(x, y, TILE_SIZE * 1.6));
     ring.setStrokeStyle(4, 0xf97316, 0.7);
     ring.setDepth(32);
     this.tweens.add({
@@ -582,7 +711,7 @@ export abstract class PlayScene extends Phaser.Scene {
     const end = target
       ? playerCenter(target)
       : { x: origin.x + player.facing * STUN_BOLT_RANGE, y: origin.y };
-    const beam = this.add.line(0, 0, origin.x, origin.y, end.x, end.y, 0xa78bfa, 0.9);
+    const beam = this.world(this.add.line(0, 0, origin.x, origin.y, end.x, end.y, 0xa78bfa, 0.9));
     beam.setOrigin(0, 0);
     beam.setLineWidth(5, 2);
     beam.setDepth(34);
@@ -751,7 +880,7 @@ export abstract class PlayScene extends Phaser.Scene {
     const texture = textureForTile(this.grid.get(tileX, tileY));
     if (!texture) return;
     const { x, y } = this.grid.tileToWorldCenter(tileX, tileY);
-    const sprite = this.add.image(x, y, texture);
+    const sprite = this.world(this.add.image(x, y, texture));
     sprite.setDepth(texture === TEXTURES.finish ? 2 : 1);
     if (texture === TEXTURES.finish) sprite.setAlpha(0.8);
     this.tileSprites.set(key, sprite);
@@ -759,7 +888,7 @@ export abstract class PlayScene extends Phaser.Scene {
 
   private addBreakFlash(tileX: number, tileY: number): void {
     const { x, y } = this.grid.tileToWorldCenter(tileX, tileY);
-    const flash = this.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, 0xfde68a, 0.5);
+    const flash = this.world(this.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, 0xfde68a, 0.5));
     flash.setDepth(30);
     this.tweens.add({
       targets: flash,
@@ -773,7 +902,7 @@ export abstract class PlayScene extends Phaser.Scene {
   private addBreakDebris(tileX: number, tileY: number): void {
     const { x, y } = this.grid.tileToWorldCenter(tileX, tileY);
     for (let i = 0; i < 5; i++) {
-      const chip = this.add.rectangle(x, y, 5, 5, 0xf8fafc, 0.74);
+      const chip = this.world(this.add.rectangle(x, y, 5, 5, 0xf8fafc, 0.74));
       chip.setDepth(29);
       const angle = -Math.PI / 2 + (i - 2) * 0.42;
       const distance = 16 + i * 3;
@@ -793,7 +922,7 @@ export abstract class PlayScene extends Phaser.Scene {
 
   private addPickupSpark(tileX: number, tileY: number, color: number): void {
     const { x, y } = this.grid.tileToWorldCenter(tileX, tileY);
-    const ring = this.add.circle(x, y, 9);
+    const ring = this.world(this.add.circle(x, y, 9));
     ring.setStrokeStyle(3, color, 0.82);
     ring.setDepth(33);
     this.tweens.add({
@@ -806,7 +935,7 @@ export abstract class PlayScene extends Phaser.Scene {
     });
 
     for (let i = 0; i < 4; i++) {
-      const dot = this.add.circle(x, y, 2.5, color, 0.9);
+      const dot = this.world(this.add.circle(x, y, 2.5, color, 0.9));
       dot.setDepth(34);
       const angle = (Math.PI / 2) * i + 0.35;
       this.tweens.add({
@@ -822,10 +951,12 @@ export abstract class PlayScene extends Phaser.Scene {
   }
 
   private addFrenzyTrail(player: PlayPlayer): void {
-    const ghost = this.add.image(
-      player.x + player.width / 2,
-      player.y + player.height / 2,
-      textureKeyForVariant(variantForSlot(player.slot)),
+    const ghost = this.world(
+      this.add.image(
+        player.x + player.width / 2,
+        player.y + player.height / 2,
+        textureKeyForVariant(variantForSlot(player.slot)),
+      ),
     );
     ghost.setTint(Phaser.Display.Color.HexStringToColor(player.color).color);
     ghost.setFlipX(player.facing < 0);
@@ -842,7 +973,7 @@ export abstract class PlayScene extends Phaser.Scene {
 
   private addFailedHitFlash(tileX: number, tileY: number): void {
     const { x, y } = this.grid.tileToWorldCenter(tileX, tileY);
-    const fail = this.add.rectangle(x, y, TILE_SIZE - 4, TILE_SIZE - 4);
+    const fail = this.world(this.add.rectangle(x, y, TILE_SIZE - 4, TILE_SIZE - 4));
     fail.setStrokeStyle(3, 0xf8fafc, 0.72);
     fail.setDepth(31);
     this.tweens.add({
@@ -879,7 +1010,7 @@ export abstract class PlayScene extends Phaser.Scene {
 
       const from = this.grid.tileToWorldCenter(drop.fromX, drop.fromY);
       const to = this.grid.tileToWorldCenter(drop.toX, drop.toY);
-      const sprite = this.add.image(from.x, from.y, texture);
+      const sprite = this.world(this.add.image(from.x, from.y, texture));
       sprite.setDepth(12);
       this.tweens.add({
         targets: sprite,
@@ -943,6 +1074,15 @@ export abstract class PlayScene extends Phaser.Scene {
   private readonly cameraLerpFactor = 0.08;
 
   private updateCamera(): void {
+    if (this.splitActive) {
+      this.updateSplitCameras();
+    } else {
+      this.updateSharedCamera();
+    }
+  }
+
+  /** Single shared rubber-band camera: frames all active players (1-human path). */
+  private updateSharedCamera(): void {
     // Exclude finished players from bounding box so camera tracks active racers
     const active = this.players.filter((player) => player.alive && !player.finished);
     const targets = active.length > 0 ? active : this.players.filter((p) => !p.finished);
@@ -957,20 +1097,8 @@ export abstract class PlayScene extends Phaser.Scene {
     const minY = Math.min(...centers.map((point) => point.y));
     const maxY = Math.max(...centers.map((point) => point.y));
 
-    const spreadTiles = Math.max(maxX - minX, maxY - minY) / TILE_SIZE;
-    const centroidX = (minX + maxX) / 2;
-    const centroidY = (minY + maxY) / 2;
-
-    // If all active players are within 8 tiles, center on centroid; otherwise bounding box
-    let targetX: number;
-    let targetY: number;
-    if (spreadTiles <= 8) {
-      targetX = centroidX;
-      targetY = centroidY;
-    } else {
-      targetX = centroidX;
-      targetY = centroidY;
-    }
+    const targetX = (minX + maxX) / 2;
+    const targetY = (minY + maxY) / 2;
 
     // Smooth lerp to target position
     this.cameraTargetX = Phaser.Math.Linear(this.cameraTargetX, targetX, this.cameraLerpFactor);
@@ -978,16 +1106,74 @@ export abstract class PlayScene extends Phaser.Scene {
 
     const spanX = Math.max(420, maxX - minX + 260);
     const spanY = Math.max(260, maxY - minY + 190);
-    const minZoom = this.mode === "race" ? 0.45 : 0.45;
-    const maxZoom = 1.0;
     const zoom = Phaser.Math.Clamp(
       Math.min(this.scale.width / spanX, this.scale.height / spanY),
-      minZoom,
-      maxZoom,
+      0.45,
+      1.0,
     );
     const camera = this.cameras.main;
     camera.zoom = Phaser.Math.Linear(camera.zoom, zoom, this.cameraLerpFactor);
     camera.centerOn(this.cameraTargetX, this.cameraTargetY);
+  }
+
+  /** Per-human split-screen: each pane follows its own player at a fixed zoom. */
+  private updateSplitCameras(): void {
+    const fullW = this.scale.width;
+    const fullH = this.scale.height;
+    // Recompute from the live screen size so the layout survives window resizes.
+    const panes = computeSplitLayout(this.paneCams.length, { width: fullW, height: fullH });
+
+    this.paneCams.forEach((pane, index) => {
+      const layout = panes[index];
+      pane.camera.setViewport(layout.x, layout.y, layout.width, layout.height);
+
+      const player = this.players.find((candidate) => candidate.slot === pane.slot);
+      if (player) {
+        // A finished player keeps their last view rather than snapping away.
+        pane.targetX = Phaser.Math.Linear(
+          pane.targetX,
+          player.x + player.width / 2,
+          this.cameraLerpFactor,
+        );
+        pane.targetY = Phaser.Math.Linear(
+          pane.targetY,
+          player.y + player.height / 2,
+          this.cameraLerpFactor,
+        );
+      }
+
+      const zoom = Phaser.Math.Clamp(layout.width / (SPLIT_TARGET_TILES * TILE_SIZE), 0.5, 1.4);
+      pane.camera.setZoom(zoom);
+      pane.camera.centerOn(pane.targetX, pane.targetY);
+    });
+
+    this.uiCamera?.setViewport(0, 0, fullW, fullH);
+    this.layoutDividers(fullW, fullH);
+  }
+
+  /** Position the divider lines along the seams of the current split layout. */
+  private layoutDividers(fullW: number, fullH: number): void {
+    const count = this.paneCams.length;
+    if (!this.vDivider || !this.hDivider) return;
+
+    if (count === 2) {
+      // Single vertical seam down the middle.
+      this.vDivider.setPosition(fullW / 2, fullH / 2).setSize(SPLIT_DIVIDER_THICKNESS, fullH);
+      this.vDivider.setVisible(true);
+      this.hDivider.setVisible(false);
+    } else if (count === 3) {
+      // Vertical seam across the top row only, horizontal seam across the middle.
+      this.vDivider.setPosition(fullW / 2, fullH / 4).setSize(SPLIT_DIVIDER_THICKNESS, fullH / 2);
+      this.vDivider.setVisible(true);
+      this.hDivider.setPosition(fullW / 2, fullH / 2).setSize(fullW, SPLIT_DIVIDER_THICKNESS);
+      this.hDivider.setVisible(true);
+    } else {
+      // 2x2 grid: full vertical and horizontal seams.
+      this.vDivider.setPosition(fullW / 2, fullH / 2).setSize(SPLIT_DIVIDER_THICKNESS, fullH);
+      this.vDivider.setVisible(true);
+      this.hDivider.setPosition(fullW / 2, fullH / 2).setSize(fullW, SPLIT_DIVIDER_THICKNESS);
+      this.hDivider.setVisible(true);
+    }
   }
 
   private updateHud(): void {
@@ -1023,7 +1209,7 @@ export abstract class PlayScene extends Phaser.Scene {
         },
       );
       options.setOrigin(0.5);
-      this.pauseLayer = this.add.container(0, 0, [shade, title, options]);
+      this.pauseLayer = this.ui(this.add.container(0, 0, [shade, title, options]));
       this.pauseLayer.setScrollFactor(0);
       this.pauseLayer.setDepth(100);
     } else {
