@@ -1,0 +1,14 @@
+{
+  "name": "@pfp/mydrunner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'mydrunner has its own dev server (see the mydrunner repo, packages/client, port 5173) — this wrapper has no local dev server of its own.'",
+    "build": "node scripts/build.mjs",
+    "typecheck": "echo 'mydrunner: no local TypeScript source in this wrapper; see the mydrunner repo.'"
+  },
+  "dependencies": {
+    "@pfp/sdk": "workspace:*"
+  }
+}

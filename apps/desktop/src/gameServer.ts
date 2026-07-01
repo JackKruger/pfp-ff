@@ -7,9 +7,17 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
 
 const execFileAsync = promisify(execFile);
+
+// apps/desktop/src (dev) or apps/desktop/dist (packaged) -> repo root, so
+// manifests can give `desktopServer.cwd` as a path relative to the repo
+// (e.g. "../mydrunner" for a sibling repo) instead of guessing whatever cwd
+// the Electron process happens to have been launched with.
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 export interface DesktopServerConfig {
   /** argv, e.g. ["node", "dist/server.js"]. command[0] is the executable. */
@@ -109,7 +117,8 @@ async function startGameServer(
   const [command, ...args] = config.command;
   if (!command) throw new Error("desktopServer.command must have at least one entry");
 
-  const child = spawn(command, args, { cwd: config.cwd, stdio: "inherit" });
+  const cwd = path.isAbsolute(config.cwd) ? config.cwd : path.resolve(REPO_ROOT, config.cwd);
+  const child = spawn(command, args, { cwd, stdio: "inherit" });
   currentChild = child;
 
   try {

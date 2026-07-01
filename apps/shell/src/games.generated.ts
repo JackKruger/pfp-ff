@@ -3,6 +3,7 @@
 import type { GameManifest } from "@pfp/sdk";
 import fowlPlay from "../../../games/fowl-play/game.manifest.js";
 import ironYard from "../../../games/iron-yard/game.manifest.js";
+import mydrunner from "../../../games/mydrunner/game.manifest.js";
 import partyMix from "../../../games/party-mix/game.manifest.js";
 import pong from "../../../games/pong/game.manifest.js";
 import raskulls from "../../../games/raskulls/game.manifest.js";
@@ -12,6 +13,7 @@ import stickSmash from "../../../games/stick-smash/game.manifest.js";
 export const GAME_MANIFESTS = [
   fowlPlay,
   ironYard,
+  mydrunner,
   partyMix,
   pong,
   raskulls,
