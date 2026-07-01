@@ -25,6 +25,11 @@ import {
 
 // "done" = game over received; blocks overlay until results navigation fires.
 const LOAD_TIMEOUT_MS = 8_000;
+// Games with build.desktopServer wait on a locally-spawned server's health
+// check (apps/desktop's HEALTH_CHECK_TIMEOUT_MS is 10s) before they can even
+// call ready() — give them enough room that a healthy-but-slow server doesn't
+// trip the generic load timeout.
+const DESKTOP_SERVER_LOAD_TIMEOUT_MS = 16_000;
 
 export function GameScreen() {
   const {
@@ -40,6 +45,9 @@ export function GameScreen() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const hostRef = useRef<GameHost | null>(null);
   const controlForwarderRef = useRef<ControlForwarder | null>(null);
+  // Bridges the load-timeout effect (below) to the current mount's teardown
+  // path, so a timed-out load also stops any desktop server it started.
+  const closeIframeRef = useRef<(() => void) | null>(null);
 
   const [phase, setPhase] = useState<GameScreenPhase>("loading");
   const [overlayItem, setOverlayItem] = useState<GameScreenOverlayItem>("resume");
@@ -102,12 +110,21 @@ export function GameScreen() {
     profilesRef.current = profiles;
   }, [profiles]);
 
-  // Timeout: if the game doesn't call ready() within 8 s, show an error.
+  // Timeout: if the game doesn't call ready() in time, show an error and tear
+  // the iframe (and any desktop server it started) down via closeIframeRef —
+  // otherwise a timed-out load left a server process running with nothing to
+  // ever stop it.
   useEffect(() => {
     if (phase !== "loading") return;
-    const timer = setTimeout(() => setPhase("error"), LOAD_TIMEOUT_MS);
+    const timeoutMs = selectedGame?.build?.desktopServer
+      ? DESKTOP_SERVER_LOAD_TIMEOUT_MS
+      : LOAD_TIMEOUT_MS;
+    const timer = setTimeout(() => {
+      setPhase("error");
+      closeIframeRef.current?.();
+    }, timeoutMs);
     return () => clearTimeout(timer);
-  }, [phase]);
+  }, [phase, selectedGame]);
 
   // Controller: Start = toggle overlay; in overlay, up/down/A/B navigate.
   useEffect(() => {
@@ -191,30 +208,37 @@ export function GameScreen() {
 
     let closed = false;
     let unregisterControlForwarder: (() => void) | null = null;
-    let desktopServerStarted = false;
+    const desktopServer = game.build?.desktopServer;
     const host = createIframeHost(iframe, { sdkRange: game.sdk });
     hostRef.current = host;
+
+    // Unconditional (not gated by "did the start call resolve yet") so a
+    // teardown that races ahead of startGameServer's in-flight IPC call still
+    // stops the server once it exists: stopGameServer() is a documented
+    // no-op when nothing is running (apps/desktop/src/gameServer.ts), so
+    // calling it defensively costs nothing.
+    const stopDesktopServer = () => {
+      if (desktopServer) void window.pfpDesktop?.stopGameServer();
+    };
 
     // Kicked off in parallel with the iframe load so it's ready (or close to
     // it) by the time the game reports `ready`. Resolves to undefined for
     // games without build.desktopServer, or in plain-browser mode.
     const desktopServerUrl: Promise<string | undefined> = (async () => {
-      const desktopServer = game.build?.desktopServer;
       if (!desktopServer || !window.pfpDesktop) return undefined;
       const { url } = await window.pfpDesktop.startGameServer(desktopServer);
-      desktopServerStarted = true;
+      if (closed) {
+        // Teardown already ran (and found nothing to stop, since the child
+        // didn't exist yet) before this resolved — stop the now-orphaned
+        // server here instead.
+        stopDesktopServer();
+        return undefined;
+      }
       return url;
     })().catch((error) => {
       console.error("Failed to start desktop game server:", error);
       return undefined;
     });
-
-    const stopDesktopServerIfStarted = () => {
-      if (desktopServerStarted) {
-        desktopServerStarted = false;
-        void window.pfpDesktop?.stopGameServer();
-      }
-    };
 
     const disposeControlForwarder = () => {
       unregisterControlForwarder?.();
@@ -224,13 +248,15 @@ export function GameScreen() {
     };
 
     const closeIframe = () => {
+      if (closed) return;
       closed = true;
       disposeControlForwarder();
       host.dispose();
       if (hostRef.current === host) hostRef.current = null;
       iframe.src = "about:blank";
-      stopDesktopServerIfStarted();
+      stopDesktopServer();
     };
+    closeIframeRef.current = closeIframe;
 
     const returnToShell = () => {
       if (closed) return;
@@ -261,6 +287,12 @@ export function GameScreen() {
 
       void desktopServerUrl.then((serverUrl) => {
         if (closed) return;
+        if (desktopServer && !serverUrl) {
+          console.error("Desktop game server failed to start; aborting launch.");
+          setPhase("error");
+          closeIframe();
+          return;
+        }
 
         const context = {
           sessionId: crypto.randomUUID(),
@@ -295,14 +327,25 @@ export function GameScreen() {
     host.onGameOver((result) => {
       if (closed) return;
       closed = true;
-      setPhase("done");
-      setResult(result);
-      navigate("results");
-      void recordMatchBestEffort(result, recordMatch);
+      // session.endless games have no ranking to show or record — enforced
+      // here (not just left to the game's own choice of requestExit vs
+      // gameOver) so a misbehaving/updated game can't silently start
+      // recording matches its manifest says it never will.
+      if (game.session?.endless) {
+        console.warn(
+          `${game.id} declares session.endless but called gameOver(); ignoring its GameResult.`,
+        );
+        navigate("home");
+      } else {
+        setPhase("done");
+        setResult(result);
+        navigate("results");
+        void recordMatchBestEffort(result, recordMatch);
+      }
       disposeControlForwarder();
       host.dispose();
       if (hostRef.current === host) hostRef.current = null;
-      stopDesktopServerIfStarted();
+      stopDesktopServer();
     });
 
     host.onRequestExit(returnToShell);
@@ -319,11 +362,12 @@ export function GameScreen() {
     return () => {
       if (!closed) host.terminate();
       closed = true;
+      closeIframeRef.current = null;
       disposeControlForwarder();
       host.dispose();
       if (hostRef.current === host) hostRef.current = null;
       iframe.src = "about:blank";
-      stopDesktopServerIfStarted();
+      stopDesktopServer();
     };
   }, [selectedGame, selectedGameSettings, setResult, recordMatch, navigate, ticker]);
 
