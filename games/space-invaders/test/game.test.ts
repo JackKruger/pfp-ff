@@ -14,12 +14,16 @@ import {
   ARENA_H,
   ARENA_W,
   createGame,
+  MAX_LIVES,
+  POWERUP_DURATION_MS,
+  RAPID_FIRE_COOLDOWN,
   SAUCER_H,
   SAUCER_INTERVAL_BASE,
   SAUCER_W,
   SAUCER_Y,
   SHIELD_CELLS_X,
   SHIELD_CELLS_Y,
+  SHIELD_DURATION_MS,
   SHIELD_H,
   SHIELD_W,
   SHIP_INVINCIBLE_MS,
@@ -34,6 +38,7 @@ import {
   type GameState,
   type InputFrame,
   type PlayerInput,
+  type PowerUpKind,
 } from "../src/game.js";
 
 const IDLE: PlayerInput = { axis: 0, shoot: false, start: false, back: false };
@@ -1001,5 +1006,221 @@ describe("3-player standings", () => {
     expect(standings[0]!.rank).toBe(1);
     expect(standings[1]!.rank).toBe(1);
     expect(standings[2]!.rank).toBe(3); // rank 2 is skipped
+  });
+});
+
+// =============================================================================
+// Power-ups
+// =============================================================================
+
+/** Places a collectable power-up directly over player `idx`'s ship. */
+function dropOnPlayer(s: GameState, idx: number, kind: PowerUpKind): void {
+  s.powerUps.push({ x: s.players[idx]!.x, y: SHIP_Y, kind });
+}
+
+describe("power-up collection", () => {
+  it("a player collects a power-up by touching it", () => {
+    const s = playingState(1);
+    dropOnPlayer(s, 0, "rapid");
+    advance(s, 20, idleFrame(1));
+    expect(s.powerUps.length).toBe(0);
+    expect(s.players[0]!.rapidTimer).toBeGreaterThan(0);
+    expect(s.players[0]!.powerUpsCollected).toBe(1);
+    expect(s.events).toContain("powerup");
+  });
+
+  it("rapid, spread, pierce, and shield set their timers", () => {
+    for (const kind of ["rapid", "spread", "pierce", "shield"] as PowerUpKind[]) {
+      const s = playingState(1);
+      dropOnPlayer(s, 0, kind);
+      advance(s, 20, idleFrame(1));
+      const p = s.players[0]!;
+      const timer =
+        kind === "rapid"
+          ? p.rapidTimer
+          : kind === "spread"
+            ? p.spreadTimer
+            : kind === "pierce"
+              ? p.pierceTimer
+              : p.shieldTimer;
+      expect(timer).toBeGreaterThan(0);
+    }
+  });
+
+  it("an extra-life power-up grants a life and emits extraLife", () => {
+    const s = playingState(1);
+    s.players[0]!.lives = 3;
+    dropOnPlayer(s, 0, "life");
+    advance(s, 20, idleFrame(1));
+    expect(s.players[0]!.lives).toBe(4);
+    expect(s.events).toContain("extraLife");
+  });
+
+  it("extra life is capped at MAX_LIVES", () => {
+    const s = playingState(1);
+    s.players[0]!.lives = MAX_LIVES;
+    dropOnPlayer(s, 0, "life");
+    advance(s, 20, idleFrame(1));
+    expect(s.players[0]!.lives).toBe(MAX_LIVES);
+  });
+
+  it("a dead/respawning ship cannot collect power-ups", () => {
+    const s = playingState(1);
+    s.players[0]!.respawnTimer = 500;
+    dropOnPlayer(s, 0, "rapid");
+    advance(s, 20, idleFrame(1));
+    expect(s.players[0]!.powerUpsCollected).toBe(0);
+    expect(s.players[0]!.rapidTimer).toBe(0);
+  });
+
+  it("uncollected power-ups fall and despawn off the bottom", () => {
+    const s = playingState(1);
+    s.powerUps.push({ x: 50, y: ARENA_H + 40, kind: "rapid" });
+    advance(s, 20, idleFrame(1));
+    expect(s.powerUps.length).toBe(0);
+    expect(s.players[0]!.rapidTimer).toBe(0); // not collected
+  });
+
+  it("power-up timers count down and expire", () => {
+    const s = playingState(1);
+    s.players[0]!.rapidTimer = 150;
+    for (let i = 0; i < 3; i++) advance(s, 100, idleFrame(1));
+    expect(s.players[0]!.rapidTimer).toBe(0);
+  });
+
+  it("spawnWave clears falling power-ups", () => {
+    const s = playingState(1);
+    s.powerUps.push({ x: 100, y: 200, kind: "spread" });
+    spawnWave(s);
+    expect(s.powerUps.length).toBe(0);
+  });
+});
+
+describe("shield power-up", () => {
+  it("a shielded ship survives an alien bullet and absorbs it", () => {
+    const s = playingState(1);
+    s.players[0]!.shieldTimer = SHIELD_DURATION_MS;
+    s.alienBullets.push({ x: s.players[0]!.x, y: SHIP_Y });
+    advance(s, 20, idleFrame(1));
+    expect(s.players[0]!.lives).toBe(SHIP_LIVES);
+    expect(s.alienBullets.length).toBe(0); // absorbed
+    expect(s.events).toContain("shieldBlock");
+  });
+});
+
+describe("spread shot", () => {
+  it("fires a primary bullet plus two angled extras", () => {
+    const s = playingState(1);
+    s.players[0]!.spreadTimer = POWERUP_DURATION_MS;
+    advance(s, 20, shootFrame(1));
+    expect(s.players[0]!.bullet).not.toBeNull();
+    expect(s.players[0]!.extraBullets.length).toBe(2);
+    const vxs = s.players[0]!.extraBullets.map((b) => b.vx ?? 0);
+    expect(vxs.some((v) => v < 0)).toBe(true);
+    expect(vxs.some((v) => v > 0)).toBe(true);
+    expect(s.players[0]!.shotsFired).toBe(3);
+  });
+});
+
+describe("rapid fire", () => {
+  it("allows multiple bullets in flight with a shorter cooldown", () => {
+    const s = playingState(1);
+    s.players[0]!.x = ARENA_W / 2; // clear of shields
+    s.players[0]!.rapidTimer = POWERUP_DURATION_MS;
+
+    advance(s, 20, shootFrame(1));
+    expect(s.players[0]!.bullet).not.toBeNull();
+    expect(s.players[0]!.extraBullets.length).toBe(0);
+
+    // Wait out the (short) rapid cooldown, then fire again. dt is clamped to
+    // 100ms per advance, so step a couple of frames to clear the cooldown.
+    advance(s, 100, shootFrame(1));
+    advance(s, 100, shootFrame(1));
+    expect(s.players[0]!.extraBullets.length).toBeGreaterThanOrEqual(1);
+    expect(RAPID_FIRE_COOLDOWN).toBeLessThan(SHIP_SHOOT_COOLDOWN);
+  });
+});
+
+describe("piercing shot", () => {
+  it("a piercing bullet is not consumed when it kills an alien", () => {
+    const s = playingState(1);
+    const alienX = s.alienGridX + ALIEN_W / 2;
+    const alienY = s.alienGridY + 4 * (ALIEN_H + ALIEN_GAP_Y) + ALIEN_H / 2;
+    s.players[0]!.bullet = { x: alienX, y: alienY, piercing: true };
+    advance(s, 20, idleFrame(1));
+    expect(s.aliens[4]![0]!.alive).toBe(false);
+    expect(s.players[0]!.bullet).not.toBeNull(); // carries on
+  });
+});
+
+describe("saucer power-up drop", () => {
+  it("shooting a saucer always drops a power-up", () => {
+    const s = playingState(1);
+    s.powerUps.length = 0;
+    s.saucer = { x: 400, y: SAUCER_Y, dir: 1, points: 100 };
+    s.players[0]!.bullet = { x: 400, y: SAUCER_Y + SAUCER_H / 2 };
+    advance(s, 20, idleFrame(1));
+    expect(s.saucer).toBeNull();
+    expect(s.powerUps.length).toBe(1);
+  });
+});
+
+// =============================================================================
+// Combo multiplier
+// =============================================================================
+
+describe("combo multiplier", () => {
+  it("first kill scores at x1", () => {
+    const s = playingState(1);
+    s.players[0]!.bullet = { x: s.alienGridX + ALIEN_W / 2, y: s.alienGridY + ALIEN_H / 2 };
+    advance(s, 20, idleFrame(1));
+    expect(s.players[0]!.score).toBe(50); // row 0 base
+    expect(s.players[0]!.comboCount).toBe(1);
+  });
+
+  it("chained kills ramp the multiplier", () => {
+    const s = playingState(1);
+    // First kill: col 0, row 0 → 50 at x1
+    s.players[0]!.bullet = { x: s.alienGridX + ALIEN_W / 2, y: s.alienGridY + ALIEN_H / 2 };
+    advance(s, 20, idleFrame(1));
+    expect(s.players[0]!.score).toBe(50);
+
+    // Second kill within the window: col 1, row 0 → 50 at x2 = 100
+    const a1x = s.alienGridX + 1 * (ALIEN_W + ALIEN_GAP_X) + ALIEN_W / 2;
+    s.players[0]!.bullet = { x: a1x, y: s.alienGridY + ALIEN_H / 2 };
+    advance(s, 20, idleFrame(1));
+    expect(s.players[0]!.comboCount).toBe(2);
+    expect(s.players[0]!.maxCombo).toBe(2);
+    expect(s.players[0]!.score).toBe(150); // 50 + 100
+  });
+
+  it("combo resets when the window lapses", () => {
+    const s = playingState(1);
+    s.players[0]!.comboCount = 5;
+    s.players[0]!.comboTimer = 100;
+    advance(s, 100, idleFrame(1));
+    advance(s, 50, idleFrame(1));
+    expect(s.players[0]!.comboCount).toBe(0);
+  });
+
+  it("dying resets the combo", () => {
+    const s = playingState(1);
+    s.players[0]!.comboCount = 4;
+    s.players[0]!.comboTimer = 2000;
+    s.players[0]!.lives = 2;
+    s.alienBullets.push({ x: s.players[0]!.x, y: SHIP_Y });
+    advance(s, 20, idleFrame(1));
+    expect(s.players[0]!.comboCount).toBe(0);
+  });
+});
+
+describe("power-up stats in standings", () => {
+  it("reports powerUpsCollected and maxCombo per player", () => {
+    const s = playingState(2);
+    s.players[0]!.powerUpsCollected = 3;
+    s.players[0]!.maxCombo = 5;
+    const standings = standingsFor(s);
+    const p0 = standings.find((st) => st.slot === 0)!;
+    expect(p0.stats).toMatchObject({ powerUpsCollected: 3, maxCombo: 5 });
   });
 });
