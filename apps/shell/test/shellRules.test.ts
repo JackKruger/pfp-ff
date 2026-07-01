@@ -4,7 +4,9 @@ import { GAME_MANIFESTS } from "../src/games.generated.js";
 import { GAMES } from "../src/games.js";
 import {
   canStartGame,
+  isGameLaunchable,
   playableGamesMissingBuild,
+  requiresDesktopBridge,
   usesShellForwardedInput,
 } from "../src/shellRules.js";
 
@@ -58,5 +60,39 @@ describe("shell rules", () => {
 
     expect(inputModeById.get("pong")).toBe("forwarded");
     expect(inputModeById.get("space-invaders")).toBe("forwarded");
+  });
+
+  it("only requires a desktop bridge for games declaring build.desktopServer", () => {
+    expect(requiresDesktopBridge({})).toBe(false);
+    expect(requiresDesktopBridge({ build: { built: true } })).toBe(false);
+    expect(
+      requiresDesktopBridge({
+        build: {
+          desktopServer: {
+            command: ["node", "server.js"],
+            cwd: ".",
+            healthCheckUrl: "http://localhost:2567/health",
+            port: 2567,
+          },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("only allows launching a desktop-server game when a desktop bridge is present", () => {
+    const desktopGame = {
+      build: {
+        desktopServer: {
+          command: ["node", "server.js"],
+          cwd: ".",
+          healthCheckUrl: "http://localhost:2567/health",
+          port: 2567,
+        },
+      },
+    };
+
+    expect(isGameLaunchable(desktopGame, false)).toBe(false);
+    expect(isGameLaunchable(desktopGame, true)).toBe(true);
+    expect(isGameLaunchable({}, false)).toBe(true);
   });
 });

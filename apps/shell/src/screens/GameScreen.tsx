@@ -191,8 +191,30 @@ export function GameScreen() {
 
     let closed = false;
     let unregisterControlForwarder: (() => void) | null = null;
+    let desktopServerStarted = false;
     const host = createIframeHost(iframe, { sdkRange: game.sdk });
     hostRef.current = host;
+
+    // Kicked off in parallel with the iframe load so it's ready (or close to
+    // it) by the time the game reports `ready`. Resolves to undefined for
+    // games without build.desktopServer, or in plain-browser mode.
+    const desktopServerUrl: Promise<string | undefined> = (async () => {
+      const desktopServer = game.build?.desktopServer;
+      if (!desktopServer || !window.pfpDesktop) return undefined;
+      const { url } = await window.pfpDesktop.startGameServer(desktopServer);
+      desktopServerStarted = true;
+      return url;
+    })().catch((error) => {
+      console.error("Failed to start desktop game server:", error);
+      return undefined;
+    });
+
+    const stopDesktopServerIfStarted = () => {
+      if (desktopServerStarted) {
+        desktopServerStarted = false;
+        void window.pfpDesktop?.stopGameServer();
+      }
+    };
 
     const disposeControlForwarder = () => {
       unregisterControlForwarder?.();
@@ -207,6 +229,7 @@ export function GameScreen() {
       host.dispose();
       if (hostRef.current === host) hostRef.current = null;
       iframe.src = "about:blank";
+      stopDesktopServerIfStarted();
     };
 
     const returnToShell = () => {
@@ -236,33 +259,37 @@ export function GameScreen() {
         };
       });
 
-      const context = {
-        sessionId: crypto.randomUUID(),
-        sdkVersion: SDK_VERSION,
-        players,
-        settings: settings.value,
-      };
+      void desktopServerUrl.then((serverUrl) => {
+        if (closed) return;
 
-      host.launch(context);
-      if (usesShellForwardedInput(game)) {
-        // Keyboard fallback so forwarded games stay playable in dev without a
-        // gamepad; it only fills slots whose controller is disconnected.
-        const keyboard = new KeyboardControlSource();
-        keyboard.attach();
-        const forwarder = createControlForwarder({
-          host,
-          poller: ticker.poller,
+        const context = {
+          sessionId: crypto.randomUUID(),
+          sdkVersion: SDK_VERSION,
           players,
-          schema: schemaFromManifest(game.input),
-          keyboard,
-          clock: () => performance.now(),
-        });
-        controlForwarderRef.current = forwarder;
-        unregisterControlForwarder = ticker.onTick(() => {
-          if (phaseRef.current === "playing") forwarder.sendFrame();
-        });
-      }
-      setPhase("playing");
+          settings: serverUrl ? { ...settings.value, serverUrl } : settings.value,
+        };
+
+        host.launch(context);
+        if (usesShellForwardedInput(game)) {
+          // Keyboard fallback so forwarded games stay playable in dev without a
+          // gamepad; it only fills slots whose controller is disconnected.
+          const keyboard = new KeyboardControlSource();
+          keyboard.attach();
+          const forwarder = createControlForwarder({
+            host,
+            poller: ticker.poller,
+            players,
+            schema: schemaFromManifest(game.input),
+            keyboard,
+            clock: () => performance.now(),
+          });
+          controlForwarderRef.current = forwarder;
+          unregisterControlForwarder = ticker.onTick(() => {
+            if (phaseRef.current === "playing") forwarder.sendFrame();
+          });
+        }
+        setPhase("playing");
+      });
     });
 
     host.onGameOver((result) => {
@@ -275,6 +302,7 @@ export function GameScreen() {
       disposeControlForwarder();
       host.dispose();
       if (hostRef.current === host) hostRef.current = null;
+      stopDesktopServerIfStarted();
     });
 
     host.onRequestExit(returnToShell);
@@ -295,6 +323,7 @@ export function GameScreen() {
       host.dispose();
       if (hostRef.current === host) hostRef.current = null;
       iframe.src = "about:blank";
+      stopDesktopServerIfStarted();
     };
   }, [selectedGame, selectedGameSettings, setResult, recordMatch, navigate, ticker]);
 

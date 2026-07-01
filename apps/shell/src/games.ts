@@ -1,5 +1,6 @@
 import type { GameManifest, GamePresentationCategory } from "@pfp/sdk";
 import { GAME_MANIFESTS } from "./games.generated.js";
+import { isGameLaunchable } from "./shellRules.js";
 
 /** Filterable library categories shown as tabs in the shell header. */
 export type GameCategory = GamePresentationCategory;
@@ -33,6 +34,7 @@ export const GAMES: GameEntry[] = GAME_MANIFESTS.map(toGameEntry);
 
 function toGameEntry(manifest: GameManifest): GameEntry {
   const presentation = manifest.presentation ?? {};
+  const hasDesktopBridge = typeof window !== "undefined" && Boolean(window.pfpDesktop);
   return {
     ...manifest,
     entry: devEntryFor(manifest) ?? manifest.entry,
@@ -42,7 +44,9 @@ function toGameEntry(manifest: GameManifest): GameEntry {
     blurb: presentation.blurb ?? "",
     heroArt: presentation.heroArt,
     featured: presentation.featured,
-    disabled: presentation.disabled,
+    // A desktop-only game (build.desktopServer) is treated as "coming soon"
+    // when there's no Electron bridge available to spawn its server.
+    disabled: presentation.disabled || !isGameLaunchable(manifest, hasDesktopBridge),
   };
 }
 
