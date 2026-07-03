@@ -17,13 +17,28 @@ const CURSOR_SPEED = 360; // px/sec while stick is held
 /*  Hand draw                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/** Deterministic hand draw using a simple LCG so tests can fix seeds. */
+/**
+ * Deterministic hand draw using a simple LCG so tests can fix seeds.
+ * Draws without replacement (shuffled-bag style, refilling if `size` exceeds
+ * the pool) so a hand never wastes slots on duplicate pieces.
+ */
 export function drawHand(seed: number, size: number): PieceId[] {
   let s = (seed | 0) || 1;
-  const hand: PieceId[] = [];
-  for (let i = 0; i < size; i++) {
+  const next = (): number => {
     s = (s * 1103515245 + 12345) & 0x7fffffff;
-    hand.push(HAND_POOL[s % HAND_POOL.length]);
+    return s;
+  };
+  const hand: PieceId[] = [];
+  let bag: PieceId[] = [];
+  for (let i = 0; i < size; i++) {
+    if (bag.length === 0) {
+      bag = [...HAND_POOL];
+      for (let j = bag.length - 1; j > 0; j--) {
+        const k = next() % (j + 1);
+        [bag[j], bag[k]] = [bag[k], bag[j]];
+      }
+    }
+    hand.push(bag.pop()!);
   }
   return hand;
 }
@@ -96,6 +111,7 @@ export function tickPlacement(state: GameState, frames: PlayerFrame[], dtMs: num
       if (placed) {
         cursor.confirmed = true;
         cursor.lastPlacedUid = placed.uid;
+        state.soundEvents.push("place");
         const player = state.players.find((p) => p.slot === cursor.slot);
         if (player) {
           player.score.trapsPlaced++;

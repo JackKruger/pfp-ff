@@ -93,7 +93,11 @@ function drawPlayerChips(ctx: CanvasRenderingContext2D, state: GameState, cw: nu
         const piece = PIECES[pieceForCursor(cursor)];
         ctx.font = "500 12px system-ui, sans-serif";
         ctx.fillStyle = cursor.confirmed ? "#22c55e" : "#f59e0b";
-        ctx.fillText(cursor.confirmed ? "READY" : piece.name, x + 100, y + 8);
+        const label = cursor.confirmed
+          ? "READY"
+          : `${piece.name} (${cursor.handIdx + 1}/${cursor.hand.length})`;
+        // Clamp to the chip so long piece names don't spill past its edge.
+        ctx.fillText(label, x + 100, y + 8, chipW - 116);
       }
     }
   }

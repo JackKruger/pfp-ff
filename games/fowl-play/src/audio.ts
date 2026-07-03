@@ -33,6 +33,10 @@ export class FowlAudio {
       case "jump":
         this.beep({ freq: 440, sweepTo: 880, ms: 120, type: "square", gain: 0.18 });
         break;
+      case "place":
+        // Soft wooden "click" for committing a piece.
+        this.beep({ freq: 520, sweepTo: 390, ms: 70, type: "triangle", gain: 0.16 });
+        break;
       case "coin":
         this.beep({ freq: 880, sweepTo: 1320, ms: 80, type: "triangle", gain: 0.22 });
         this.beep({ freq: 1320, sweepTo: 1760, ms: 90, type: "triangle", gain: 0.18, delay: 60 });

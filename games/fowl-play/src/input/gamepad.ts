@@ -133,7 +133,10 @@ export class InputReader {
     const jumpHeld =
       this.keyboard.has("Space") || this.keyboard.has("KeyJ") || this.keyboard.has("KeyZ");
     f.jumpHeld = jumpHeld;
-    f.jumpDown = this.keyboardEdges.has("Space") || this.keyboardEdges.has("KeyJ");
+    f.jumpDown =
+      this.keyboardEdges.has("Space") ||
+      this.keyboardEdges.has("KeyJ") ||
+      this.keyboardEdges.has("KeyZ");
     f.confirmDown = f.jumpDown;
     f.cancelDown = this.keyboardEdges.has("KeyK") || this.keyboardEdges.has("Escape");
     f.nextDown = this.keyboardEdges.has("KeyE");

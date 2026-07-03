@@ -157,6 +157,35 @@ describe("puck", () => {
   });
 });
 
+describe("puck wind-down", () => {
+  it("deactivates once friction slows it below threat speed", () => {
+    const state = emptyState();
+    const piece = makePlaced(1, "puck", 100, 100, 0, 0);
+    state.pieces.push(piece);
+    state.runtime.set(piece.uid, initRuntimeFor(piece)!);
+
+    // Well before the 60s lifetime backstop, decay alone should retire it.
+    for (let i = 0; i < 200; i++) tickMovers(state, 50); // 10s
+    expect(state.runtime.get(1)!.active).toBe(false);
+    expect(pieceIsLethal(piece, state.runtime.get(1))).toBe(false);
+  });
+});
+
+describe("log landing on placed pieces", () => {
+  it("settles on a player-placed plank instead of falling through", () => {
+    const state = emptyState();
+    const log = makePlaced(1, "log", 100, 0, 0, 0);
+    const plank = makePlaced(2, "plank", 84, 300, 0, 0); // solid, in the path
+    state.pieces.push(log, plank);
+    state.runtime.set(log.uid, initRuntimeFor(log)!);
+
+    for (let i = 0; i < 120; i++) tickMovers(state, 50);
+    expect(state.runtime.get(1)!.state).toBe("landed");
+    // Log (96 tall) rests on the plank top at y=300.
+    expect(log.y).toBeCloseTo(300 - 96, 0);
+  });
+});
+
 describe("fan", () => {
   it("applies horizontal acceleration to a player in front of it", () => {
     const state = emptyState();

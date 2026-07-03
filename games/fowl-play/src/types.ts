@@ -217,6 +217,8 @@ export interface RaceActor {
   jumpHeld: boolean;
   /** ms since the jump began, for variable cut window. */
   jumpAge: number;
+  /** Friction multiplier of the surface currently stood on (ice < 1). */
+  groundFrictionMul?: number;
   /** Coins collected this round. */
   roundCoins: number;
   diamondsThisRound: number;
@@ -294,6 +296,7 @@ export type DeathCause = PieceId | "fall" | "crush" | "blade";
 /** Sound events emitted by the FSM each tick; drained by the audio layer. */
 export type SoundEvent =
   | "jump"
+  | "place"
   | "coin"
   | "diamond"
   | "death"
