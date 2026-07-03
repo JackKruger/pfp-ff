@@ -157,11 +157,41 @@ export interface GamePresentationManifest {
   disabled?: boolean;
 }
 
+/**
+ * Optional desktop-only server process the shell must spawn before launching
+ * the game and tear down on exit. Used by games whose client needs a locally
+ * running backend (e.g. an authoritative multiplayer server). Only honored by
+ * the Electron desktop shell (`apps/desktop`); browser-only shells cannot spawn
+ * processes, so games declaring this must be treated as unlaunchable there.
+ */
+export interface GameDesktopServerManifest {
+  /** argv, e.g. ["node", "dist/server.js"]. command[0] is the executable. */
+  command: string[];
+  /** Working directory the command is spawned from. */
+  cwd: string;
+  /** URL polled until it responds ok before the game is launched. */
+  healthCheckUrl: string;
+  /** Port the server listens on; used to best-effort clear stale listeners. */
+  port: number;
+}
+
 /** Optional build/dev metadata used by shell catalog tooling. */
 export interface GameBuildManifest {
   packageName?: string;
   devPort?: number;
   built?: boolean;
+  /** Desktop-only local server process this game needs the shell to manage. */
+  desktopServer?: GameDesktopServerManifest;
+}
+
+/** Optional session-shape metadata about how a match ends. */
+export interface GameSessionManifest {
+  /**
+   * True for games with no win condition or match ranking (e.g. an open
+   * sandbox/exploration mode). The shell skips results/recording on
+   * `requestExit` for these and just returns to the library.
+   */
+  endless?: boolean;
 }
 
 /** `game.json` — what a game ships so the shell can list and launch it (§5.1). */
@@ -190,6 +220,8 @@ export interface GameManifest {
   presentation?: GamePresentationManifest;
   /** Optional build/dev metadata for catalog tooling. */
   build?: GameBuildManifest;
+  /** Optional session-shape metadata (e.g. endless games with no ranking). */
+  session?: GameSessionManifest;
 }
 
 /** One player position in a match, bound to a controller and (maybe) a profile. */

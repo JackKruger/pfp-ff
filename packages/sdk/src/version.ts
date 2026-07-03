@@ -4,7 +4,7 @@
  * host checks that declaration against this value. Semver: breaking contract
  * changes bump major, additive changes bump minor.
  */
-export const SDK_VERSION = "1.0.0";
+export const SDK_VERSION = "1.1.0";
 
 export interface SemVer {
   major: number;

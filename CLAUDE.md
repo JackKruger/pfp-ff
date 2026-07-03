@@ -54,8 +54,16 @@ builds in dependency order (packages, then games, then apps).
 - `packages/ui` — shared controller-focus navigation, theme, widgets (typecheck only).
 - `packages/game-kit` — *planned*, not yet present.
 - `apps/shell` — the launcher app (React + Zustand + Vite). Entry into everything.
-- `games/{pong,space-invaders,raskulls,iron-yard,party-mix}` — bundled games,
-  each a small Vite app with a `game.manifest.ts`. Party-mix is parked/disabled.
+- `apps/desktop` — Electron wrapper around `apps/shell`. Only needed by games
+  whose manifest declares `build.desktopServer` (a locally-spawned Node server
+  process the browser can't start on its own, e.g. mydrunner); see
+  `apps/desktop/src/gameServer.ts`. Plain-browser `apps/shell` still runs and
+  is unaffected — such games are just disabled outside the desktop wrapper.
+- `games/{pong,space-invaders,raskulls,iron-yard,party-mix,mydrunner}` — bundled
+  games, each a small Vite app with a `game.manifest.ts`. Party-mix is
+  parked/disabled. `mydrunner` is a thin wrapper: its real source is a
+  separate repo/workspace (different Node engine requirement), built and
+  copied in by `games/mydrunner/scripts/build.mjs`.
 
 Package names are all `@pfp/<dir>` (e.g. `@pfp/shell`, `@pfp/sdk`). Cross-package
 deps use `workspace:*`.
@@ -76,6 +84,9 @@ before changing anything protocol-shaped. Key pieces:
   (with `LaunchContext`: session id, player slots, gamepad indices) → game runs →
   `gameOver` (with a `GameResult`). Other messages: `pause`/`resume`/`terminate`
   (shell→game), `requestExit`/`error` (game→shell), and optional `inputFrame`.
+  Exception: manifests with `session.endless: true` have no win condition —
+  they exit via `requestExit` instead of `gameOver`, and the shell skips the
+  results screen/match recording for that session.
 - **The normalizing insight:** every match reduces to a **ranking plus optional
   freeform stats**. `GameResult.standings[]` carries `rank` (1 = winner, ties
   share a rank) and open `stats`/`gameStats` maps the platform stores verbatim

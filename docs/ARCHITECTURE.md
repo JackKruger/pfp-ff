@@ -183,6 +183,18 @@ because the shell Vite build copies only those game `dist/` folders into the
 final shell bundle. During development, the root `pnpm dev` script starts only
 the games listed in its filters; other game dev servers can be run separately.
 
+Two optional manifest fields exist for games that don't fit the default
+ranked-match shape:
+
+- `session.endless`: true for games with no win condition or match ranking
+  (e.g. an open sandbox/exploration mode). The shell skips results/recording
+  when such a game's player requests exit and just returns to the library —
+  there is no `GameResult` to show.
+- `build.desktopServer`: declares a local Node server process the game's
+  client needs (e.g. an authoritative multiplayer server). Only the Electron
+  desktop shell (`apps/desktop`) can spawn processes, so games declaring this
+  are treated as unlaunchable in plain-browser mode. See §5.7.
+
 ### 5.2 Launch context — Shell → Game
 
 When a game starts, the shell sends who's playing and which controller each slot
@@ -307,6 +319,29 @@ This gives us two layers for free:
 The contract is semver'd (`sdkVersion`). The host checks a game's `sdk` range in
 its manifest and warns on mismatch. Additive changes = minor; breaking changes =
 major with a compatibility shim where feasible.
+
+### 5.7 Desktop-only games (`apps/desktop`, `build.desktopServer`)
+
+Some games need a locally-running backend process (e.g. a server-authoritative
+multiplayer server) rather than running entirely client-side in the iframe.
+`apps/desktop` is a thin Electron wrapper around the shell that adds a
+generic, game-agnostic mechanism for this:
+
+- A game declares `build.desktopServer` — `{ command, cwd, healthCheckUrl, port }`
+  — describing how to spawn its server.
+- Electron's main process (`apps/desktop/src/gameServer.ts`) exposes
+  `game-server:start` / `game-server:stop` IPC handlers: start spawns the
+  process and polls `healthCheckUrl` until it's ready; stop sends `SIGTERM`
+  (then `SIGKILL` after a grace period). Only one server runs at a time,
+  matching the shell's single-game-at-a-time model.
+- A preload script exposes this as `window.pfpDesktop` in the renderer. The
+  shell checks for it before launching a `desktopServer` game: if present, it
+  starts the server and adds the resolved URL to `LaunchContext.settings` as
+  `serverUrl` before calling `host.launch(...)`; if absent (plain-browser
+  mode), the game is shown as unlaunchable in the library, the same way
+  `presentation.disabled` games are.
+- The shell stops the server on game over, request-exit, error, or navigating
+  away, so nothing is ever left running behind it.
 
 ---
 

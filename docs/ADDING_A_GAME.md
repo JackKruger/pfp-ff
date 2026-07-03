@@ -119,6 +119,16 @@ pnpm --filter @pfp/your-game dev
 or add it to the root `pnpm dev` filters if you want it to start with the shell.
 The shell uses `manifest.build.devPort` to point at that dev server.
 
+**No win condition?** Set `session: { endless: true }` in the manifest. The
+shell won't expect a `GameResult` on request-exit — see §7.
+
+**Need a local server process?** Set `build.desktopServer` to
+`{ command, cwd, healthCheckUrl, port }` and the Electron desktop shell
+(`apps/desktop`) will spawn and tear it down around each session, passing the
+resolved URL to your game as `LaunchContext.settings.serverUrl`. This only
+works in the desktop shell — see `docs/ARCHITECTURE.md` §5.7. Games declaring
+it are shown as unavailable in plain-browser mode.
+
 ---
 
 ## 3. The game lifecycle
@@ -321,6 +331,11 @@ Rules:
 - Every player who played must have a `PlayerStanding` (even if they quit early — give them last place).
 - `rank` starts at 1. Ties are fine: if two players draw, both get `rank: 1` and there is no `rank: 2`.
 - `score` is optional but will be shown on the results screen if provided.
+
+**Endless games** (`session: { endless: true }` in the manifest) don't have a
+ranking to report. Skip `gameOver()` entirely — just call `client.requestExit()`
+when a player quits, same as §8 below. The shell returns straight to the
+library without a results screen or a match record.
 
 ---
 

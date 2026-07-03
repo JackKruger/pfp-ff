@@ -5,6 +5,7 @@ export const BUILT_GAME_IDS = [
   "stick-smash",
   "iron-yard",
   "fowl-play",
+  "mydrunner",
 ] as const;
 
 export type BuiltGameId = (typeof BUILT_GAME_IDS)[number];
