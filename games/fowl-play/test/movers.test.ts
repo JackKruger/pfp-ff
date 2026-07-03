@@ -43,6 +43,9 @@ function emptyState(): GameState {
     nextUid: 100,
     startedAt: 0,
     showLookAroundHint: false,
+    suddenDeath: false,
+    pendingHandSeed: 0,
+    finalConfettiAcc: 0,
   };
 }
 

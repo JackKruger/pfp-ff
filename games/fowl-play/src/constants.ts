@@ -37,7 +37,12 @@ export const RACE_COUNTDOWN_MS = 3_000;
 export const RACE_MAX_MS = 60_000;
 export const SCORE_MS = 5_000;
 export const LOOK_AROUND_MS = 5_000; // first placement of each match
-export const FINAL_HOLD_MS = 12_000; // long enough to read the awards; A skips
+export const ROUND_LOOK_MS = 2_000; // shorter look-around between subsequent rounds
+export const SUDDEN_DEATH_LOOK_MS = 2_500; // brief beat before each sudden-death race
+// Long enough to read the standings + awards; any player can press A to skip
+// once the 1.5s reveal grace has passed.
+export const FINAL_HOLD_MS = 12_000;
+export const FINAL_CONFETTI_MS = 100; // emit a confetti burst every N ms during final
 
 // Match
 export const WIN_SCORE = 9;

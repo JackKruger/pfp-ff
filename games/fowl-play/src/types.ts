@@ -91,21 +91,37 @@ export interface ArenaScorer {
 
 /**
  * Environment hazard a specific arena owns — they aren't player-placeable and
- * aren't part of the piece registry. Currently the only kind is the windmill's
- * rotating blade.
+ * aren't part of the piece registry. Two kinds today: the windmill's rotating
+ * blade and a generic sweeper that ping-pongs between two points.
  */
-export type ArenaDynamic = {
-  kind: "blade";
-  /** Pivot point in world coordinates. */
-  pivotX: number;
-  pivotY: number;
-  /** Length of the rotating arm. */
-  length: number;
-  /** Width of the lethal segment perpendicular to the arm. */
-  thickness: number;
-  /** Rotation period in ms (positive = clockwise). */
-  periodMs: number;
-};
+export type ArenaDynamic =
+  | {
+      kind: "blade";
+      /** Pivot point in world coordinates. */
+      pivotX: number;
+      pivotY: number;
+      /** Length of the rotating arm. */
+      length: number;
+      /** Width of the lethal segment perpendicular to the arm. */
+      thickness: number;
+      /** Rotation period in ms (positive = clockwise). */
+      periodMs: number;
+    }
+  | {
+      kind: "sweeper";
+      /** Endpoints of the AABB centre, in world coords. */
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      /** Lethal AABB size. */
+      w: number;
+      h: number;
+      /** Round-trip period (ms). */
+      periodMs: number;
+      /** 0..1; offsets the triangle wave at race start. */
+      phase?: number;
+    };
 
 export interface Arena {
   id: string;
@@ -291,7 +307,7 @@ export interface GoalPulse {
 }
 
 /** Cause of death for the toast layer and stats. */
-export type DeathCause = PieceId | "fall" | "crush" | "blade";
+export type DeathCause = PieceId | "fall" | "crush" | "blade" | "sweeper";
 
 /** Sound events emitted by the FSM each tick; drained by the audio layer. */
 export type SoundEvent =
@@ -378,6 +394,14 @@ export interface GameState {
   levelSelectIdx?: number;
   /** Latch so one stick push = one step while cycling arenas in levelSelect. */
   levelHeld?: boolean;
+  /** True once the match reached the win threshold but the leaders tied — the
+   *  next intro skips placement and runs a no-place race until the tie breaks. */
+  suddenDeath: boolean;
+  /** Seed handed off from intro → placement so the per-round hand draw stays
+   *  reproducible when intro is run between rounds. */
+  pendingHandSeed: number;
+  /** Accumulator (ms) driving confetti cadence in the final phase. */
+  finalConfettiAcc: number;
 }
 
 /* -------------------------------------------------------------------------- */

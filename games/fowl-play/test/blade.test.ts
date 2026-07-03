@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { RACE_MAX_MS } from "../src/constants.js";
 import { WINDMILL } from "../src/arenas/windmill.js";
-import { bladeTip, beginRace, tickRace } from "../src/phases/race.js";
+import { bladeTip, beginRace, sweeperCenter, tickRace } from "../src/phases/race.js";
 import { makeFrame, type ArenaDynamic, type PlayerFrame } from "../src/types.js";
 import { buildPlayer, buildTestState } from "./_helpers.js";
 
@@ -13,9 +13,12 @@ describe("Windmill arena", () => {
   it("declares a rotating blade in its dynamics list", () => {
     const dyns = WINDMILL.dynamics ?? [];
     expect(dyns.length).toBe(1);
-    expect(dyns[0].kind).toBe("blade");
-    expect(dyns[0].length).toBeGreaterThan(0);
-    expect(dyns[0].periodMs).toBeGreaterThan(0);
+    const [first] = dyns;
+    expect(first.kind).toBe("blade");
+    if (first.kind === "blade") {
+      expect(first.length).toBeGreaterThan(0);
+      expect(first.periodMs).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -130,5 +133,69 @@ describe("blade lethality", () => {
     state.actors[0].y = 100 - 12;
     tickRace(state, pump(), 16);
     expect(state.actors[0].alive).toBe(true);
+  });
+});
+
+describe("sweeperCenter", () => {
+  const dyn: ArenaDynamic = {
+    kind: "sweeper",
+    x1: 0,
+    y1: 0,
+    x2: 100,
+    y2: 0,
+    w: 16,
+    h: 16,
+    periodMs: 1000,
+  };
+
+  it("starts at x1,y1 at elapsed = 0", () => {
+    const c = sweeperCenter(dyn, 0);
+    expect(c.x).toBeCloseTo(0, 5);
+    expect(c.y).toBeCloseTo(0, 5);
+  });
+
+  it("reaches the far endpoint at half a period", () => {
+    const c = sweeperCenter(dyn, 500);
+    expect(c.x).toBeCloseTo(100, 5);
+    expect(c.y).toBeCloseTo(0, 5);
+  });
+
+  it("returns to the origin at a full period (triangle wave)", () => {
+    const c = sweeperCenter(dyn, 1000);
+    expect(c.x).toBeCloseTo(0, 5);
+    expect(c.y).toBeCloseTo(0, 5);
+  });
+});
+
+describe("sweeper lethality", () => {
+  it("kills an actor standing in the sweeper's AABB and records cause 'sweeper'", () => {
+    const state = buildTestState({
+      players: [buildPlayer(0)],
+      phase: "race",
+    });
+    state.arena = {
+      ...state.arena,
+      dynamics: [
+        {
+          kind: "sweeper",
+          x1: 100,
+          y1: 100,
+          x2: 300,
+          y2: 100,
+          w: 32,
+          h: 32,
+          periodMs: 1000,
+        },
+      ],
+    };
+    beginRace(state);
+    state.phaseTimer = RACE_MAX_MS;
+    // Sweeper starts at (100,100) — drop the actor right on top.
+    state.actors[0].x = 100 - 12;
+    state.actors[0].y = 100 - 12;
+    tickRace(state, pump(), 16);
+    expect(state.actors[0].alive).toBe(false);
+    expect(state.actors[0].killedByCause).toBe("sweeper");
+    expect(state.actors[0].killedBy).toBe(-1);
   });
 });

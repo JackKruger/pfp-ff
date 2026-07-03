@@ -39,5 +39,20 @@ export const HENHOUSE: Arena = {
     { x: 112, y: 600, r: 64 },
     { x: 1528, y: 128, r: 64 },
   ],
+  dynamics: [
+    // A swooping farmhand broom sliding along the low perches level. The
+    // sweep crosses through the climbing lane so players have to time their
+    // hops.
+    {
+      kind: "sweeper",
+      x1: 240,
+      y1: 504,
+      x2: 1240,
+      y2: 264,
+      w: 28,
+      h: 28,
+      periodMs: 5800,
+    },
+  ],
   bg: { top: "#7c2d12", bottom: "#1c1917" },
 };

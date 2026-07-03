@@ -1,4 +1,10 @@
-import { PLACEMENT_MS, RACE_MAX_MS, SCORE_MS, URGENCY_THRESHOLD_MS } from "../constants.js";
+import {
+  FINAL_HOLD_MS,
+  PLACEMENT_MS,
+  RACE_MAX_MS,
+  SCORE_MS,
+  URGENCY_THRESHOLD_MS,
+} from "../constants.js";
 import { computeAwards } from "../awards.js";
 import { PIECES } from "../pieces/registry.js";
 import { pieceForCursor } from "../phases/placement.js";
@@ -215,10 +221,13 @@ function bannerText(state: GameState): string {
     case "levelSelect":
       return "Choose your arena";
     case "intro":
+      if (state.suddenDeath) return "SUDDEN DEATH";
+      if (state.round > 1) return `Round ${state.round} — Look around`;
       return "Get ready…";
     case "placement":
       return `Round ${state.round} — Place a trap`;
     case "race":
+      if (state.suddenDeath) return raceIsCountdown(state) ? "Tiebreak!" : "SUDDEN DEATH";
       return raceIsCountdown(state) ? "Get set…" : "RACE!";
     case "score":
       return "Round results";
@@ -348,11 +357,13 @@ function drawFinalOverlay(
 
   const awardsH = awards.length ? 40 + awards.length * 30 : 0;
   const panelW = 560;
-  const panelH = 120 + standings.length * 44 + awardsH + 36;
+  const panelH = 140 + standings.length * 44 + awardsH + 24;
   const px = (cw - panelW) / 2;
   const py = (ch - panelH) / 2;
 
-  ctx.fillStyle = "rgba(2,6,23,0.95)";
+  // Semi-transparent backdrop so the world-space confetti the FSM emits each
+  // tick remains visible behind the standings panel.
+  ctx.fillStyle = "rgba(2,6,23,0.55)";
   ctx.fillRect(0, 0, cw, ch);
   ctx.fillStyle = "rgba(15,23,42,0.95)";
   ctx.fillRect(px, py, panelW, panelH);
@@ -360,18 +371,20 @@ function drawFinalOverlay(
   ctx.lineWidth = 3;
   ctx.strokeRect(px, py, panelW, panelH);
 
-  ctx.font = "800 32px system-ui, sans-serif";
+  // Winner title with a gentle hop so it feels alive.
+  const hop = Math.sin(Date.now() / 220) * 4;
+  ctx.font = "800 34px system-ui, sans-serif";
   ctx.textBaseline = "top";
   ctx.textAlign = "center";
   ctx.fillStyle = winner?.color ?? "#e2e8f0";
-  ctx.fillText(winner ? `${winner.displayName} wins!` : "Match over", cw / 2, py + 24);
+  ctx.fillText(winner ? `${winner.displayName} wins!` : "Match over", cw / 2, py + 24 + hop);
 
   ctx.font = "500 14px system-ui, sans-serif";
   ctx.fillStyle = "#94a3b8";
-  ctx.fillText("Final standings", cw / 2, py + 68);
+  ctx.fillText("Final standings", cw / 2, py + 76);
   ctx.textAlign = "start";
 
-  let row = py + 100;
+  let row = py + 108;
   for (const s of standings) {
     const player = state.players.find((p) => p.slot === s.slot);
     if (!player) continue;
@@ -417,13 +430,20 @@ function drawFinalOverlay(
     }
   }
 
-  // Skip hint at the bottom of the panel.
-  ctx.font = "500 13px system-ui, sans-serif";
-  ctx.fillStyle = "#64748b";
-  ctx.textAlign = "center";
-  ctx.fillText("A — continue", cw / 2, py + panelH - 24);
-  ctx.textAlign = "start";
+  // "Press A to continue" once we're past the grace window. Pulses so it reads
+  // as an interactive prompt rather than a static label.
+  if (state.phaseTimer <= FINAL_HOLD_MS - 1500) {
+    const pulse = 0.65 + 0.35 * Math.sin(Date.now() / 250);
+    ctx.globalAlpha = pulse;
+    ctx.font = "600 16px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillText("Press A to continue", cw / 2, py + panelH - 28);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "start";
+  }
 }
+
 
 /* -------------------------------------------------------------------------- */
 /*  Intro / look-around hint                                                  */

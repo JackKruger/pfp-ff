@@ -202,6 +202,29 @@ export function spawnBurst(state: GameState, x: number, y: number, color: string
   }
 }
 
+/**
+ * Drop a small batch of confetti particles from the top of the arena. The
+ * final-phase celebration drains and refills this on a cadence so the screen
+ * stays alive while the winner panel sits up. Colors cycle through the player
+ * palette so each match's confetti feels themed to its players.
+ */
+const CONFETTI_COLORS = ["#ef4444", "#3b82f6", "#22c55e", "#f59e0b", "#ec4899", "#a78bfa"] as const;
+export function emitConfetti(state: GameState, count: number): void {
+  const b = state.arena.bounds;
+  for (let i = 0; i < count; i++) {
+    const x = b.x + Math.random() * b.w;
+    state.particles.push({
+      x,
+      y: b.y - 20,
+      vx: (Math.random() - 0.5) * 80,
+      vy: 40 + Math.random() * 80,
+      color: CONFETTI_COLORS[(i + Math.floor(Math.random() * CONFETTI_COLORS.length)) % CONFETTI_COLORS.length],
+      life: 2400,
+      maxLife: 2400,
+    });
+  }
+}
+
 /** Human-readable death cause for the screen-space toast. */
 function deathLabel(cause: DeathCause): string {
   switch (cause) {
@@ -211,6 +234,8 @@ function deathLabel(cause: DeathCause): string {
       return "got crushed";
     case "blade":
       return "was sliced by the WINDMILL";
+    case "sweeper":
+      return "got run over";
     case "spike":
       return "stepped on SPIKES";
     case "saw":
@@ -241,6 +266,7 @@ function tickArenaDynamics(state: GameState, _dtMs: number): void {
   const elapsed = raceElapsedMs(state);
   for (const d of state.arena.dynamics) {
     if (d.kind === "blade") tickBlade(state, d, elapsed);
+    else if (d.kind === "sweeper") tickSweeper(state, d, elapsed);
   }
 }
 
@@ -259,6 +285,50 @@ function tickBlade(state: GameState, d: ArenaDynamic, raceElapsedMs: number): vo
       killActor(state, actor, -1, "blade");
     }
   }
+}
+
+/**
+ * A "sweeper" is a lethal AABB that ping-pongs along a line between two
+ * endpoints. Triangle wave on race time gives a steady back-and-forth motion
+ * with predictable timing for players to read.
+ */
+function tickSweeper(state: GameState, d: ArenaDynamic, raceElapsedMs: number): void {
+  if (d.kind !== "sweeper") return;
+  const center = sweeperCenter(d, raceElapsedMs);
+  const aabb = {
+    x: center.x - d.w / 2,
+    y: center.y - d.h / 2,
+    w: d.w,
+    h: d.h,
+  };
+  for (const actor of state.actors) {
+    if (!actor.alive || actor.finished) continue;
+    const ax = actor.x + PLAYER_W / 2;
+    const ay = actor.y + PLAYER_H / 2;
+    if (
+      ax >= aabb.x &&
+      ax <= aabb.x + aabb.w &&
+      ay >= aabb.y &&
+      ay <= aabb.y + aabb.h
+    ) {
+      killActor(state, actor, -1, "sweeper");
+    }
+  }
+}
+
+/** Centre point of a sweeper at `raceElapsedMs`. Exported for renderer + tests. */
+export function sweeperCenter(
+  d: ArenaDynamic,
+  raceElapsedMs: number,
+): { x: number; y: number } {
+  if (d.kind !== "sweeper") return { x: 0, y: 0 };
+  const t = ((raceElapsedMs / d.periodMs + (d.phase ?? 0)) % 1 + 1) % 1;
+  // Triangle wave: 0..0.5 → 0..1, 0.5..1 → 1..0.
+  const tri = t < 0.5 ? t * 2 : 2 - t * 2;
+  return {
+    x: d.x1 + (d.x2 - d.x1) * tri,
+    y: d.y1 + (d.y2 - d.y1) * tri,
+  };
 }
 
 /** Shortest distance from (px, py) to the segment (x1,y1)-(x2,y2). */
@@ -281,7 +351,7 @@ function distToSegment(
 
 /** Compute the current blade tip world position — exposed for renderer + tests. */
 export function bladeTip(d: ArenaDynamic, raceElapsedMs: number): { x: number; y: number } {
-  if (d.kind !== "blade") return { x: d.pivotX, y: d.pivotY };
+  if (d.kind !== "blade") return { x: 0, y: 0 };
   const angle = ((raceElapsedMs % d.periodMs) / d.periodMs) * Math.PI * 2;
   return {
     x: d.pivotX + Math.cos(angle) * d.length,
