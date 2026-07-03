@@ -37,7 +37,7 @@ export const RACE_COUNTDOWN_MS = 3_000;
 export const RACE_MAX_MS = 60_000;
 export const SCORE_MS = 5_000;
 export const LOOK_AROUND_MS = 5_000; // first placement of each match
-export const FINAL_HOLD_MS = 4_000;
+export const FINAL_HOLD_MS = 12_000; // long enough to read the awards; A skips
 
 // Match
 export const WIN_SCORE = 9;

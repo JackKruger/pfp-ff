@@ -1,4 +1,5 @@
 import { PLACEMENT_MS, RACE_MAX_MS, SCORE_MS, URGENCY_THRESHOLD_MS } from "../constants.js";
+import { computeAwards } from "../awards.js";
 import { PIECES } from "../pieces/registry.js";
 import { pieceForCursor } from "../phases/placement.js";
 import { countdownRemainingMs, raceElapsedMs, raceIsCountdown } from "../phases/race.js";
@@ -343,9 +344,11 @@ function drawFinalOverlay(
   const standings = computeStandings(state);
   const winnerSlot = standings.find((s) => s.rank === 1)?.slot;
   const winner = winnerSlot != null ? state.players.find((p) => p.slot === winnerSlot) : null;
+  const awards = computeAwards(state.players);
 
+  const awardsH = awards.length ? 40 + awards.length * 30 : 0;
   const panelW = 560;
-  const panelH = 120 + standings.length * 44;
+  const panelH = 120 + standings.length * 44 + awardsH + 36;
   const px = (cw - panelW) / 2;
   const py = (ch - panelH) / 2;
 
@@ -388,6 +391,38 @@ function drawFinalOverlay(
     );
     row += 44;
   }
+
+  // Awards — one line each: "Menace   Alice · 3 trap kills".
+  if (awards.length) {
+    row += 8;
+    ctx.strokeStyle = "#334155";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px + 24, row);
+    ctx.lineTo(px + panelW - 24, row);
+    ctx.stroke();
+    row += 12;
+    for (const award of awards) {
+      const player = state.players.find((p) => p.slot === award.slot);
+      if (!player) continue;
+      ctx.font = "700 15px system-ui, sans-serif";
+      ctx.fillStyle = "#fbbf24";
+      ctx.fillText(`🏆 ${award.title}`, px + 44, row + 6);
+      ctx.font = "500 14px system-ui, sans-serif";
+      ctx.fillStyle = player.color;
+      ctx.fillText(player.displayName ?? `P${player.slot + 1}`, px + 280, row + 7);
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillText(`· ${award.detail}`, px + 400, row + 7);
+      row += 30;
+    }
+  }
+
+  // Skip hint at the bottom of the panel.
+  ctx.font = "500 13px system-ui, sans-serif";
+  ctx.fillStyle = "#64748b";
+  ctx.textAlign = "center";
+  ctx.fillText("A — continue", cw / 2, py + panelH - 24);
+  ctx.textAlign = "start";
 }
 
 /* -------------------------------------------------------------------------- */
