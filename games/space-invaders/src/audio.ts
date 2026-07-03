@@ -77,6 +77,26 @@ export class SIAudio {
         this.beep(660, 120, "square", 0.11, 440);
         this.beep(880, 300, "square", 0.12, 550);
         break;
+      case "powerupDrop":
+        // Soft descending blip so players notice something dropped.
+        this.beep(720, 60, "sine", 0.05, 0);
+        this.beep(560, 70, "sine", 0.05, 60);
+        break;
+      case "powerup":
+        // Bright ascending pickup arpeggio.
+        this.beep(523, 70, "square", 0.09, 0);
+        this.beep(659, 70, "square", 0.09, 70);
+        this.beep(880, 110, "square", 0.1, 140);
+        break;
+      case "extraLife":
+        this.beep(659, 90, "triangle", 0.11, 0);
+        this.beep(988, 90, "triangle", 0.11, 90);
+        this.beep(1319, 150, "triangle", 0.11, 180);
+        break;
+      case "shieldBlock":
+        this.beep(300, 90, "sawtooth", 0.07, 0);
+        this.beep(220, 80, "sine", 0.06, 40);
+        break;
       default:
         break;
     }

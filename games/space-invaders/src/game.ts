@@ -63,6 +63,37 @@ const SHAKE_DECAY = 50;
 // Per-row alien score values (row 0 = top, row 4 = bottom)
 const ROW_SCORE = [50, 40, 30, 20, 10];
 
+// --- Power-ups ---------------------------------------------------------------
+/** Chance a destroyed alien drops a power-up. Saucers always drop one. */
+export const POWERUP_DROP_CHANCE = 0.12;
+export const POWERUP_FALL_SPEED = 150; // px/sec
+export const POWERUP_W = 24;
+export const POWERUP_H = 24;
+export const POWERUP_DURATION_MS = 8000; // rapid / spread / pierce
+export const SHIELD_DURATION_MS = 6000; // protective bubble
+export const RAPID_FIRE_COOLDOWN = 110; // ms between shots while rapid is active
+export const RAPID_MAX_BULLETS = 4; // simultaneous bullets while rapid is active
+export const SPREAD_VX = 220; // px/sec horizontal drift for angled spread bullets
+export const MAX_LIVES = 6;
+
+// --- Combo -------------------------------------------------------------------
+export const COMBO_WINDOW_MS = 2500; // time to chain the next kill
+export const COMBO_MAX = 8; // max score multiplier
+
+export type PowerUpKind = "rapid" | "spread" | "pierce" | "shield" | "life";
+/** Weighted drop table. `life` is rarer than the offensive/defensive buffs. */
+const POWERUP_TABLE: PowerUpKind[] = [
+  "rapid",
+  "rapid",
+  "spread",
+  "spread",
+  "pierce",
+  "pierce",
+  "shield",
+  "shield",
+  "life",
+];
+
 export type Phase = "attract" | "playing" | "wavetransition" | "gameover";
 export type SoundKind =
   | "shoot"
@@ -73,11 +104,25 @@ export type SoundKind =
   | "saucerHit"
   | "waveClear"
   | "gameOver"
-  | "victory";
+  | "victory"
+  | "powerupDrop"
+  | "powerup"
+  | "extraLife"
+  | "shieldBlock";
 
 export interface PlayerBullet {
   x: number;
   y: number;
+  /** Horizontal drift (px/sec). Non-zero for angled spread-shot bullets. */
+  vx?: number;
+  /** Piercing bullets pass through aliens instead of being consumed. */
+  piercing?: boolean;
+}
+
+export interface PowerUp {
+  x: number;
+  y: number;
+  kind: PowerUpKind;
 }
 
 export interface AlienBullet {
@@ -102,8 +147,21 @@ export interface ShipState {
   respawnTimer: number;
   invincibleTimer: number;
   bullet: PlayerBullet | null;
+  /** Additional simultaneous bullets from spread-shot / rapid-fire power-ups. */
+  extraBullets: PlayerBullet[];
   axis: number;
   shootHeld: boolean;
+  // Power-up timers (ms remaining; 0 = inactive)
+  rapidTimer: number;
+  spreadTimer: number;
+  pierceTimer: number;
+  shieldTimer: number;
+  // Combo tracking
+  comboCount: number;
+  comboTimer: number;
+  maxCombo: number;
+  // Stats
+  powerUpsCollected: number;
 }
 
 export interface Alien {
@@ -155,6 +213,7 @@ export interface GameState {
   alienShootTimer: number;
   alienBullets: AlienBullet[];
   shields: Shield[];
+  powerUps: PowerUp[];
   saucer: Saucer | null;
   saucerTimer: number;
   saucerSound: boolean;
@@ -214,8 +273,17 @@ function makeShip(
     respawnTimer: 0,
     invincibleTimer: 0,
     bullet: null,
+    extraBullets: [],
     axis: 0,
     shootHeld: false,
+    rapidTimer: 0,
+    spreadTimer: 0,
+    pierceTimer: 0,
+    shieldTimer: 0,
+    comboCount: 0,
+    comboTimer: 0,
+    maxCombo: 0,
+    powerUpsCollected: 0,
   };
 }
 
@@ -259,6 +327,7 @@ export function spawnWave(state: GameState): void {
     ALIEN_SHOOT_INTERVAL_BASE - (state.wave - 1) * 50,
   );
   state.alienBullets.length = 0;
+  state.powerUps.length = 0;
   state.saucer = null;
   state.saucerTimer = SAUCER_INTERVAL_BASE + Math.random() * 8000;
 
@@ -295,6 +364,7 @@ export function spawnWave(state: GameState): void {
       p.invincibleTimer = SHIP_INVINCIBLE_MS;
       p.shootCooldown = 0;
       p.bullet = null;
+      p.extraBullets.length = 0;
     }
   }
 }
@@ -305,6 +375,7 @@ function respawnPlayer(p: ShipState): void {
   p.invincibleTimer = SHIP_INVINCIBLE_MS;
   p.shootCooldown = 0;
   p.bullet = null;
+  p.extraBullets.length = 0;
 }
 
 export function createGame(context: LaunchContext): GameState {
@@ -321,6 +392,7 @@ export function createGame(context: LaunchContext): GameState {
     alienShootTimer: ALIEN_SHOOT_INTERVAL_BASE,
     alienBullets: [],
     shields,
+    powerUps: [],
     saucer: null,
     saucerTimer: SAUCER_INTERVAL_BASE + Math.random() * 8000,
     saucerSound: false,
@@ -434,10 +506,140 @@ function spawnParticles(
   }
 }
 
+function maybeDropPowerUp(state: GameState, x: number, y: number): void {
+  if (Math.random() > POWERUP_DROP_CHANCE) return;
+  dropPowerUp(state, x, y);
+}
+
+function dropPowerUp(state: GameState, x: number, y: number): void {
+  const kind = POWERUP_TABLE[Math.floor(Math.random() * POWERUP_TABLE.length)]!;
+  state.powerUps.push({ x, y, kind });
+  state.events.push("powerupDrop");
+}
+
+/** Registers an alien kill: combo bookkeeping, scoring, FX, and power-up drops. */
+function handleAlienKill(
+  state: GameState,
+  p: ShipState,
+  row: number,
+  col: number,
+  hitX: number,
+  hitY: number,
+): void {
+  state.aliens[row]![col]!.alive = false;
+
+  // Combo: chaining kills inside the window ramps the score multiplier.
+  p.comboCount = p.comboTimer > 0 ? p.comboCount + 1 : 1;
+  p.comboTimer = COMBO_WINDOW_MS;
+  if (p.comboCount > p.maxCombo) p.maxCombo = p.comboCount;
+  const mult = Math.min(p.comboCount, COMBO_MAX);
+
+  p.score += ROW_SCORE[row]! * mult;
+  p.aliensKilled++;
+  state.totalAliensKilled++;
+  state.events.push("alienHit");
+  state.shake = Math.max(state.shake, 2);
+  spawnParticles(state, hitX, hitY, "#4ade80", 8);
+  maybeDropPowerUp(state, alienCenterX(state.alienGridX, col), hitY);
+}
+
+function applyPowerUp(state: GameState, p: ShipState, kind: PowerUpKind): void {
+  p.powerUpsCollected++;
+  state.events.push("powerup");
+  switch (kind) {
+    case "rapid":
+      p.rapidTimer = POWERUP_DURATION_MS;
+      break;
+    case "spread":
+      p.spreadTimer = POWERUP_DURATION_MS;
+      break;
+    case "pierce":
+      p.pierceTimer = POWERUP_DURATION_MS;
+      break;
+    case "shield":
+      p.shieldTimer = SHIELD_DURATION_MS;
+      break;
+    case "life":
+      if (p.lives < MAX_LIVES) p.lives++;
+      state.events.push("extraLife");
+      break;
+  }
+  spawnParticles(state, p.x, SHIP_Y + SHIP_H / 2, p.color, 14);
+}
+
+/**
+ * Advances one player bullet and resolves collisions. Returns true if the
+ * bullet should be removed (consumed or off-screen). Piercing bullets survive
+ * alien hits so they can cut through a column.
+ */
+function stepPlayerBullet(state: GameState, p: ShipState, b: PlayerBullet): boolean {
+  b.y -= PLAYER_BULLET_SPEED * FIXED_DT;
+  if (b.vx) b.x += b.vx * FIXED_DT;
+
+  const bx = b.x;
+  const by = b.y;
+
+  // Aliens (at most one kill per step)
+  for (let row = 0; row < ALIEN_ROWS; row++) {
+    for (let col = 0; col < ALIEN_COLS; col++) {
+      const a = state.aliens[row]![col]!;
+      if (!a.alive) continue;
+      const r = alienRect(state.alienGridX, state.alienGridY, col, row);
+      if (bx >= r.x && bx <= r.x + r.w && by <= r.y + r.h && by >= r.y) {
+        handleAlienKill(state, p, row, col, bx, r.y + r.h / 2);
+        return !b.piercing; // piercing bullets carry on
+      }
+    }
+  }
+
+  // Saucer
+  if (state.saucer) {
+    const s = state.saucer;
+    if (
+      bx >= s.x - SAUCER_W / 2 &&
+      bx <= s.x + SAUCER_W / 2 &&
+      by <= s.y + SAUCER_H / 2 &&
+      by >= s.y - SAUCER_H / 2
+    ) {
+      p.score += s.points;
+      spawnParticles(state, s.x, s.y, "#facc15", 14);
+      state.events.push("saucerHit");
+      dropPowerUp(state, s.x, s.y); // saucers always reward a power-up
+      state.saucer = null;
+      state.saucerSound = false;
+      return true;
+    }
+  }
+
+  // Shields
+  for (const shield of state.shields) {
+    if (
+      bx >= shield.x &&
+      bx <= shield.x + SHIELD_W &&
+      by >= shield.y &&
+      by <= shield.y + SHIELD_H
+    ) {
+      if (damageShield(shield, bx, by)) {
+        state.events.push("shieldHit");
+      }
+      return true;
+    }
+  }
+
+  // Off-screen (top or, for spread bullets, the sides)
+  if (by + PLAYER_BULLET_H < 0) return true;
+  if (bx < -PLAYER_BULLET_W || bx > ARENA_W + PLAYER_BULLET_W) return true;
+
+  return false;
+}
+
 function killPlayer(state: GameState, p: ShipState): boolean {
   p.deaths++;
   p.lives--;
   p.bullet = null;
+  p.extraBullets.length = 0;
+  p.comboCount = 0;
+  p.comboTimer = 0;
   state.events.push("playerHit");
   state.shake = Math.max(state.shake, 14);
   spawnParticles(state, p.x, SHIP_Y + SHIP_H / 2, p.color, 22);
@@ -460,77 +662,39 @@ function allPlayersDead(state: GameState): boolean {
 export function stepFixed(state: GameState): void {
   if (state.phase !== "playing") return;
 
-  // --- Move player bullets ---
+  // --- Move player bullets (primary + power-up extras) ---
   for (const p of state.players) {
-    if (!p.bullet) continue;
-    p.bullet.y -= PLAYER_BULLET_SPEED * FIXED_DT;
-
-    const bx = p.bullet.x;
-    const by = p.bullet.y;
-
-    // Check alien hits
-    let hit = false;
-    for (let row = 0; row < ALIEN_ROWS && !hit; row++) {
-      for (let col = 0; col < ALIEN_COLS && !hit; col++) {
-        const a = state.aliens[row]![col]!;
-        if (!a.alive) continue;
-        const r = alienRect(state.alienGridX, state.alienGridY, col, row);
-        if (bx >= r.x && bx <= r.x + r.w && by <= r.y + r.h && by >= r.y) {
-          a.alive = false;
-          p.score += ROW_SCORE[row]!;
-          p.aliensKilled++;
-          state.totalAliensKilled++;
-          state.events.push("alienHit");
-          state.shake = Math.max(state.shake, 2);
-          spawnParticles(state, bx, r.y + r.h / 2, "#4ade80", 8);
-          p.bullet = null;
-          hit = true;
-        }
+    if (p.bullet && stepPlayerBullet(state, p, p.bullet)) {
+      p.bullet = null;
+    }
+    for (let i = p.extraBullets.length - 1; i >= 0; i--) {
+      if (stepPlayerBullet(state, p, p.extraBullets[i]!)) {
+        p.extraBullets.splice(i, 1);
       }
     }
-    if (hit) continue;
+  }
 
-    // Check saucer hit
-    if (state.saucer) {
-      const s = state.saucer;
-      if (
-        bx >= s.x - SAUCER_W / 2 &&
-        bx <= s.x + SAUCER_W / 2 &&
-        by <= s.y + SAUCER_H / 2 &&
-        by >= s.y - SAUCER_H / 2
-      ) {
-        p.score += s.points;
-        spawnParticles(state, s.x, s.y, "#facc15", 14);
-        state.events.push("saucerHit");
-        state.saucer = null;
-        state.saucerSound = false;
-        p.bullet = null;
-        hit = true;
-      }
-    }
-    if (hit) continue;
+  // --- Move power-ups (fall + collection) ---
+  for (let i = state.powerUps.length - 1; i >= 0; i--) {
+    const pu = state.powerUps[i]!;
+    pu.y += POWERUP_FALL_SPEED * FIXED_DT;
 
-    // Check shield hits
-    for (const shield of state.shields) {
+    let collected = false;
+    for (const p of state.players) {
+      if (p.respawnTimer > 0) continue; // dead/respawning ships can't grab
       if (
-        bx >= shield.x &&
-        bx <= shield.x + SHIELD_W &&
-        by >= shield.y &&
-        by <= shield.y + SHIELD_H
+        pu.x >= p.x - SHIP_W / 2 - 6 &&
+        pu.x <= p.x + SHIP_W / 2 + 6 &&
+        pu.y + POWERUP_H / 2 >= SHIP_Y &&
+        pu.y - POWERUP_H / 2 <= SHIP_Y + SHIP_H
       ) {
-        if (damageShield(shield, bx, by)) {
-          state.events.push("shieldHit");
-        }
-        p.bullet = null;
-        hit = true;
+        applyPowerUp(state, p, pu.kind);
+        collected = true;
         break;
       }
     }
-    if (hit) continue;
-
-    // Off screen top
-    if (by + PLAYER_BULLET_H < 0) {
-      p.bullet = null;
+    if (collected || pu.y - POWERUP_H / 2 > ARENA_H) {
+      state.powerUps.splice(i, 1);
     }
   }
 
@@ -552,6 +716,13 @@ export function stepFixed(state: GameState): void {
         if (p.invincibleTimer > 0) {
           // Invincible — bullet passes through
           continue;
+        }
+        if (p.shieldTimer > 0) {
+          // Shield bubble absorbs the shot without harming the ship.
+          spawnParticles(state, bx, by, "#38bdf8", 10);
+          state.events.push("shieldBlock");
+          bulletConsumed = true;
+          break;
         }
         const finalDeath = killPlayer(state, p);
         if (finalDeath && allPlayersDead(state)) {
@@ -697,11 +868,25 @@ function goToGameOver(state: GameState): void {
     p.lives = 0;
     p.respawnTimer = 999999;
     p.bullet = null;
+    p.extraBullets.length = 0;
   }
 }
 
 function updatePlayers(state: GameState, dt: number): void {
   for (const p of state.players) {
+    // Power-up timers tick down regardless of alive/dead state.
+    if (p.rapidTimer > 0) p.rapidTimer = Math.max(0, p.rapidTimer - dt);
+    if (p.spreadTimer > 0) p.spreadTimer = Math.max(0, p.spreadTimer - dt);
+    if (p.pierceTimer > 0) p.pierceTimer = Math.max(0, p.pierceTimer - dt);
+    if (p.shieldTimer > 0) p.shieldTimer = Math.max(0, p.shieldTimer - dt);
+    if (p.comboTimer > 0) {
+      p.comboTimer -= dt;
+      if (p.comboTimer <= 0) {
+        p.comboTimer = 0;
+        p.comboCount = 0;
+      }
+    }
+
     // Respawn timer
     if (p.respawnTimer > 0) {
       p.respawnTimer -= dt;
@@ -726,15 +911,36 @@ function updatePlayers(state: GameState, dt: number): void {
       p.x += p.axis * SHIP_SPEED * (dt / 1000);
       p.x = clamp(p.x, SHIP_W / 2, ARENA_W - SHIP_W / 2);
 
-      // Shooting
-      if (p.shootHeld && p.shootCooldown <= 0 && !p.bullet) {
-        p.bullet = { x: p.x, y: SHIP_Y };
-        p.shootCooldown = SHIP_SHOOT_COOLDOWN;
-        p.shotsFired++;
-        state.events.push("shoot");
+      // Shooting. Rapid-fire lowers the cooldown and lets several bullets be
+      // in flight at once; otherwise the classic one-bullet limit applies.
+      const rapid = p.rapidTimer > 0;
+      const cooldown = rapid ? RAPID_FIRE_COOLDOWN : SHIP_SHOOT_COOLDOWN;
+      const activeBullets = (p.bullet ? 1 : 0) + p.extraBullets.length;
+      const maxBullets = rapid ? RAPID_MAX_BULLETS : 1;
+      if (p.shootHeld && p.shootCooldown <= 0 && activeBullets < maxBullets) {
+        firePlayer(state, p);
+        p.shootCooldown = cooldown;
       }
     }
   }
+}
+
+/** Spawns the player's bullet(s), honoring active spread/pierce power-ups. */
+function firePlayer(state: GameState, p: ShipState): void {
+  const piercing = p.pierceTimer > 0;
+  const spread = p.spreadTimer > 0;
+  const primary: PlayerBullet = { x: p.x, y: SHIP_Y, piercing };
+  if (!p.bullet) p.bullet = primary;
+  else p.extraBullets.push(primary);
+
+  if (spread) {
+    p.extraBullets.push({ x: p.x, y: SHIP_Y, vx: -SPREAD_VX, piercing });
+    p.extraBullets.push({ x: p.x, y: SHIP_Y, vx: SPREAD_VX, piercing });
+    p.shotsFired += 3;
+  } else {
+    p.shotsFired += 1;
+  }
+  state.events.push("shoot");
 }
 
 function updateFX(state: GameState, dt: number): void {
@@ -785,6 +991,8 @@ export function standingsFor(state: GameState): PlayerStanding[] {
         shotsFired: shots,
         accuracy,
         deaths: p.deaths,
+        powerUpsCollected: p.powerUpsCollected,
+        maxCombo: p.maxCombo,
       },
     });
   }

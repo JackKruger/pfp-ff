@@ -92,6 +92,7 @@ function loop(now: number): void {
         gameStats: {
           waveReached: state.wave,
           totalAliensKilled: state.totalAliensKilled,
+          totalPowerUps: state.players.reduce((n, p) => n + p.powerUpsCollected, 0),
           durationMs: Date.now() - startedAt,
           survived: state.victory,
         },

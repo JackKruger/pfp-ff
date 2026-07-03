@@ -11,6 +11,10 @@ import {
   PLAYER_BULLET_W,
   ALIEN_BULLET_H,
   ALIEN_BULLET_W,
+  POWERUP_DURATION_MS,
+  POWERUP_H,
+  POWERUP_W,
+  SHIELD_DURATION_MS,
   SAUCER_H,
   SAUCER_W,
   SHIELD_CELLS_X,
@@ -21,6 +25,9 @@ import {
   SHIP_W,
   SHIP_Y,
   type GameState,
+  type PlayerBullet,
+  type PowerUpKind,
+  type ShipState,
 } from "./game.js";
 
 const FONT = "'Segoe UI', system-ui, sans-serif";
@@ -33,6 +40,15 @@ const GRID_SPACING = 48;
 
 // Row-based neon alien colors (top to bottom)
 const ALIEN_COLORS = ["#f72585", "#b5179e", "#7209b7", "#4361ee", "#06d6a0"];
+
+// Power-up visual identity: [color, glyph, label]
+const POWERUP_STYLE: Record<PowerUpKind, { color: string; glyph: string; label: string }> = {
+  rapid: { color: "#facc15", glyph: "⚡", label: "RAPID" },
+  spread: { color: "#22d3ee", glyph: "⋔", label: "SPREAD" },
+  pierce: { color: "#a855f7", glyph: "◈", label: "PIERCE" },
+  shield: { color: "#38bdf8", glyph: "🛡", label: "SHIELD" },
+  life: { color: "#f87171", glyph: "♥", label: "1UP" },
+};
 
 export function render(
   ctx: CanvasRenderingContext2D,
@@ -68,6 +84,7 @@ export function render(
     drawAliens(ctx, state);
     drawSaucer(ctx, state);
     drawAlienBullets(ctx, state);
+    drawPowerUps(ctx, state);
     drawShips(ctx, state);
     drawPlayerBullets(ctx, state);
   }
@@ -199,33 +216,112 @@ function drawShips(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.fillRect(cx - 4, sy + h, 8, flameH);
     }
 
+    // Shield bubble
+    if (p.shieldTimer > 0) {
+      const expiring = p.shieldTimer < 1500;
+      const on = !expiring || Math.sin(state.attractBlink * 0.02) > -0.3;
+      if (on) {
+        const pulse = 1 + Math.sin(state.attractBlink * 0.01) * 0.08;
+        ctx.save();
+        ctx.strokeStyle = "#38bdf8";
+        ctx.shadowColor = "#38bdf8";
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.7 * alpha;
+        ctx.beginPath();
+        ctx.ellipse(cx, sy + h * 0.6, w * 0.85 * pulse, h * 1.5 * pulse, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     ctx.globalAlpha = 1;
   }
+}
+
+// ── Power-ups ─────────────────────────────────────────────────────────────────
+
+function drawPowerUps(ctx: CanvasRenderingContext2D, state: GameState): void {
+  for (const pu of state.powerUps) {
+    const style = POWERUP_STYLE[pu.kind];
+    const bob = Math.sin(state.attractBlink * 0.008 + pu.x) * 2;
+    const x = pu.x;
+    const y = pu.y + bob;
+    const half = POWERUP_W / 2;
+
+    // Glowing capsule
+    ctx.save();
+    ctx.shadowColor = style.color;
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = "rgba(5, 9, 20, 0.85)";
+    ctx.strokeStyle = style.color;
+    ctx.lineWidth = 2;
+    roundRect(ctx, x - half, y - POWERUP_H / 2, POWERUP_W, POWERUP_H, 6);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // Glyph
+    ctx.save();
+    ctx.shadowColor = style.color;
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = style.color;
+    ctx.font = `700 15px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(style.glyph, x, y + 1);
+    ctx.restore();
+  }
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 
 // ── Player bullets ───────────────────────────────────────────────────────────
 
 function drawPlayerBullets(ctx: CanvasRenderingContext2D, state: GameState): void {
   for (const p of state.players) {
-    if (!p.bullet) continue;
-    const bx = p.bullet.x;
-    const by = p.bullet.y;
-
-    // Glow
-    ctx.save();
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(bx - 1.5, by, 3, PLAYER_BULLET_H);
-    ctx.restore();
-
-    // Core
-    const grad = ctx.createLinearGradient(bx, by, bx, by + PLAYER_BULLET_H);
-    grad.addColorStop(0, "#ffffff");
-    grad.addColorStop(1, p.color);
-    ctx.fillStyle = grad;
-    ctx.fillRect(bx - PLAYER_BULLET_W / 2, by, PLAYER_BULLET_W, PLAYER_BULLET_H);
+    if (p.bullet) drawPlayerBullet(ctx, p.bullet, p.color);
+    for (const b of p.extraBullets) drawPlayerBullet(ctx, b, p.color);
   }
+}
+
+function drawPlayerBullet(ctx: CanvasRenderingContext2D, b: PlayerBullet, color: string): void {
+  const bx = b.x;
+  const by = b.y;
+  // Piercing bullets glow purple regardless of ship color.
+  const glow = b.piercing ? "#a855f7" : color;
+  const tail = b.piercing ? "#a855f7" : color;
+  const w = b.piercing ? PLAYER_BULLET_W + 2 : PLAYER_BULLET_W;
+
+  // Glow
+  ctx.save();
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = b.piercing ? 14 : 10;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(bx - 1.5, by, 3, PLAYER_BULLET_H);
+  ctx.restore();
+
+  // Core
+  const grad = ctx.createLinearGradient(bx, by, bx, by + PLAYER_BULLET_H);
+  grad.addColorStop(0, "#ffffff");
+  grad.addColorStop(1, tail);
+  ctx.fillStyle = grad;
+  ctx.fillRect(bx - w / 2, by, w, PLAYER_BULLET_H);
 }
 
 // ── Aliens ───────────────────────────────────────────────────────────────────
@@ -625,9 +721,28 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.shadowColor = p.color;
     ctx.shadowBlur = 6;
     ctx.fillStyle = p.color;
-    ctx.fillText(`${name} ${p.score}`, 14, sy);
+    const label = `${name} ${p.score}`;
+    ctx.fillText(label, 14, sy);
     ctx.restore();
-    sy += 22;
+
+    // Combo multiplier badge
+    if (p.comboCount > 1) {
+      const mult = Math.min(p.comboCount, 8);
+      const metrics = ctx.measureText(label);
+      ctx.save();
+      const flash = 0.7 + 0.3 * Math.sin(state.attractBlink * 0.02);
+      ctx.shadowColor = "#facc15";
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = `rgba(250, 204, 21, ${flash.toFixed(2)})`;
+      ctx.font = `700 16px ${FONT}`;
+      ctx.fillText(`x${mult}`, 14 + metrics.width + 10, sy + 1);
+      ctx.restore();
+    }
+
+    // Active power-up chips
+    drawBuffChips(ctx, p, 14, sy + 22);
+
+    sy += hasActiveBuff(p) ? 44 : 22;
   }
 
   // Wave — top-right
@@ -658,6 +773,45 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
     }
     lx += 10;
   }
+}
+
+function hasActiveBuff(p: ShipState): boolean {
+  return p.rapidTimer > 0 || p.spreadTimer > 0 || p.pierceTimer > 0 || p.shieldTimer > 0;
+}
+
+/** Draws small timed chips for each active buff a player holds. */
+function drawBuffChips(ctx: CanvasRenderingContext2D, p: ShipState, x: number, y: number): void {
+  const chips: { kind: PowerUpKind; frac: number }[] = [];
+  if (p.rapidTimer > 0) chips.push({ kind: "rapid", frac: p.rapidTimer / POWERUP_DURATION_MS });
+  if (p.spreadTimer > 0) chips.push({ kind: "spread", frac: p.spreadTimer / POWERUP_DURATION_MS });
+  if (p.pierceTimer > 0) chips.push({ kind: "pierce", frac: p.pierceTimer / POWERUP_DURATION_MS });
+  if (p.shieldTimer > 0) chips.push({ kind: "shield", frac: p.shieldTimer / SHIELD_DURATION_MS });
+
+  const chipW = 26;
+  const chipH = 16;
+  let cx = x;
+  for (const chip of chips) {
+    const style = POWERUP_STYLE[chip.kind];
+    // Background
+    ctx.fillStyle = "rgba(5, 9, 20, 0.7)";
+    roundRect(ctx, cx, y, chipW, chipH, 4);
+    ctx.fill();
+    // Countdown fill
+    ctx.fillStyle = style.color;
+    ctx.globalAlpha = 0.25;
+    roundRect(ctx, cx, y, chipW * Math.max(0, Math.min(1, chip.frac)), chipH, 4);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // Glyph
+    ctx.fillStyle = style.color;
+    ctx.font = `700 11px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(style.glyph, cx + chipW / 2, y + chipH / 2 + 1);
+    cx += chipW + 4;
+  }
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
 }
 
 // ── Overlays ─────────────────────────────────────────────────────────────────
@@ -707,6 +861,9 @@ function drawOverlays(ctx: CanvasRenderingContext2D, state: GameState): void {
     for (let i = 0; i < lines.length; i++) {
       ctx.fillText(lines[i]!, ARENA_W / 2, ARENA_H / 2 + 155 + i * 20);
     }
+
+    // Power-up legend
+    drawPowerUpLegend(ctx, ARENA_H / 2 + 165 + lines.length * 20);
 
     // Decorative alien lineup
     drawDecoAliens(ctx, state);
@@ -781,6 +938,35 @@ function drawOverlays(ctx: CanvasRenderingContext2D, state: GameState): void {
       sy += 30;
     }
   }
+}
+
+function drawPowerUpLegend(ctx: CanvasRenderingContext2D, y: number): void {
+  const kinds: PowerUpKind[] = ["rapid", "spread", "pierce", "shield", "life"];
+  const spacing = 150;
+  const totalW = (kinds.length - 1) * spacing;
+  const startX = ARENA_W / 2 - totalW / 2;
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (let i = 0; i < kinds.length; i++) {
+    const style = POWERUP_STYLE[kinds[i]!];
+    const x = startX + i * spacing;
+
+    ctx.shadowColor = style.color;
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = style.color;
+    ctx.font = `700 18px ${FONT}`;
+    ctx.fillText(style.glyph, x - 42, y);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(203, 213, 225, 0.75)";
+    ctx.font = `500 14px ${FONT}`;
+    ctx.textAlign = "left";
+    ctx.fillText(style.label, x - 30, y);
+    ctx.textAlign = "center";
+  }
+  ctx.restore();
 }
 
 function drawDecoAliens(ctx: CanvasRenderingContext2D, state: GameState): void {
