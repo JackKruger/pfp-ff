@@ -69,9 +69,10 @@ export function stepActor(
   if (Math.abs(wantX) > 0.05) {
     actor.vx += wantX * accel * FIXED_DT;
   } else if (grounded) {
-    // Friction toward 0.
+    // Friction toward 0, scaled by the surface we're standing on (ice slides).
+    const frictionMul = actor.groundFrictionMul ?? 1;
     const sign = Math.sign(actor.vx);
-    actor.vx -= sign * GROUND_FRICTION * FIXED_DT;
+    actor.vx -= sign * GROUND_FRICTION * frictionMul * FIXED_DT;
     if (Math.sign(actor.vx) !== sign) actor.vx = 0;
   }
   actor.vx = clamp(actor.vx, -WALK_MAX, WALK_MAX);
@@ -112,7 +113,12 @@ export function stepActor(
     (p) => p.pieceId === "ladder" && overlaps(playerBounds, pieceAabb(p)),
   );
 
-  if (onLadder && actor.vy >= 0) {
+  // Ladder control applies while descending OR while moving up at climb speed —
+  // a strict `vy >= 0` check would let gravity fight the climb every other
+  // frame (climb sets vy negative, which disables the ladder branch, which
+  // re-enables gravity…), producing a jerky ascent. Real jumps launch faster
+  // than LADDER_CLIMB_SPEED, so they still exit ladder mode.
+  if (onLadder && actor.vy >= -LADDER_CLIMB_SPEED) {
     // Treat ladder hold as "ground" for jump-buffer purposes (but only if not
     // already coming down from a jump — we keep variable-cut intact).
     actor.timeSinceGrounded = 0;
@@ -145,12 +151,15 @@ export function stepActor(
     allSolids.push({ aabb: pieceAabb(p), frictionMul: mul });
   }
   // One-way platforms become "solid" only when the actor is falling onto them
-  // from above. Pressing down while standing on one drops through (handled
-  // implicitly by setting it non-solid when actor.vy < ~0 so jumps clear it).
-  for (const ow of oneWaySolids) {
-    const movingDown = actor.vy >= 0;
-    const above = actor.y + PLAYER_H <= ow.y + 2;
-    if (movingDown && above) allSolids.push({ aabb: ow, frictionMul: 1 });
+  // from above. Holding down drops through: the platform is simply excluded
+  // from the solid set until the stick is released, so the actor falls clear.
+  const wantDrop = frame.moveY > 0.5 && !onLadder;
+  if (!wantDrop) {
+    for (const ow of oneWaySolids) {
+      const movingDown = actor.vy >= 0;
+      const above = actor.y + PLAYER_H <= ow.y + 2;
+      if (movingDown && above) allSolids.push({ aabb: ow, frictionMul: 1 });
+    }
   }
 
   const result = resolveMove(bounds, dx, dy, allSolids);
@@ -158,6 +167,7 @@ export function stepActor(
   actor.y = bounds.y;
 
   // Contact state for next tick
+  actor.groundFrictionMul = result.hitGround ? result.groundFrictionMul : 1;
   if (result.hitGround) {
     actor.vy = 0;
     actor.contact = "ground";

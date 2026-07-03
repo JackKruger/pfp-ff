@@ -39,7 +39,14 @@ const FAN_RANGE = 200;
 const FAN_ACCEL = 600; // px/s² toward player
 
 const PUCK_LAUNCH = 420;
-const PUCK_FRICTION = 0.997; // velocity multiplier per ms (kept above 0.99 so it survives long enough to threaten)
+// Velocity multiplier per ms. 0.9995^1000 ≈ 0.61 — the puck keeps ~60% of its
+// speed each second, staying threatening for several seconds before it winds
+// down. (The old 0.997 lost 95% of its speed in the first second, leaving a
+// near-stationary but still-lethal mine parked wherever it stopped.)
+const PUCK_FRICTION = 0.9995;
+// Below this speed the puck is spent: it stops being lethal instead of
+// lingering as an invisible trap.
+const PUCK_MIN_SPEED = 50;
 const PUCK_LIFETIME_MS = 60_000;
 
 /* -------------------------------------------------------------------------- */
@@ -224,9 +231,10 @@ function tickLog(piece: PlacedPiece, rt: RuntimePiece, dtMs: number, state: Game
       rt.active = false;
       return;
     }
-    // Land on the first solid we overlap; kill itself there.
+    // Land on the first solid we overlap — arena floors AND placed solid
+    // pieces (a log shouldn't fall straight through someone's plank).
     const aabb = pieceAabb(piece);
-    for (const s of state.arena.solids) {
+    for (const s of solidAabbs(state)) {
       if (overlaps(aabb, s)) {
         rt.state = "landed";
         rt.active = false;
@@ -266,10 +274,14 @@ function tickPuck(piece: PlacedPiece, rt: RuntimePiece, dtMs: number, state: Gam
     rt.active = false;
     return;
   }
-  // Decay velocity ever so slightly.
+  // Decay velocity ever so slightly; once it's crawling, it's spent.
   const decay = Math.pow(PUCK_FRICTION, dtMs);
   rt.vx *= decay;
   rt.vy *= decay;
+  if (Math.hypot(rt.vx, rt.vy) < PUCK_MIN_SPEED) {
+    rt.active = false;
+    return;
+  }
 
   // Move and bounce off solids by axis-separated step.
   piece.x += rt.vx * (dtMs / 1000);

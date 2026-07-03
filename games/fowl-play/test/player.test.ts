@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { stepActor } from "../src/physics/player.js";
+import { makePlaced } from "../src/pieces/registry.js";
 import {
   COYOTE_MS,
   GRAVITY,
@@ -200,6 +201,48 @@ describe("player physics", () => {
     // Should approach but not exceed WALK_MAX.
     expect(actor.vx).toBeLessThanOrEqual(WALK_MAX + 1);
     expect(actor.vx).toBeGreaterThan(WALK_MAX * 0.95);
+  });
+
+  it("ice is slipperier than a normal surface", () => {
+    // Two identical actors sliding with no input: one on planks, one on ice.
+    // The ice actor must keep far more of its speed.
+    const run = (pieceId: "plank" | "ice"): number => {
+      const a = makeActor();
+      const w = pieceId === "ice" ? 64 : 96;
+      // A long runway of the given surface with its top at y=344.
+      const pieces = Array.from({ length: 14 }, (_, i) =>
+        makePlaced(i + 1, pieceId, i * w, 344, 0, 0),
+      );
+      a.y = 300;
+      // Settle onto the surface.
+      for (let i = 0; i < 30; i++) stepActor(a, frame, [], pieces, 16);
+      a.vx = 280;
+      for (let i = 0; i < 18; i++) stepActor(a, frame, [], pieces, 16); // ~0.3s coasting
+      return a.vx;
+    };
+    const vxIce = run("ice");
+    const vxPlank = run("plank");
+    expect(vxPlank).toBeLessThan(5); // normal friction stops you fast
+    expect(vxIce).toBeGreaterThan(150); // ice keeps you sliding
+  });
+
+  it("holding down drops through a one-way platform", () => {
+    const platform = { x: 0, y: 200, w: 1000, h: 12 };
+    actor.x = 100;
+    actor.y = 200 - PLAYER_H; // standing on the platform
+    actor.vy = 0;
+    const down: PlayerFrame = { ...frame, moveY: 1 };
+    for (let i = 0; i < 30; i++) stepActor(actor, down, [], [], 16, [platform]);
+    expect(actor.y).toBeGreaterThan(platform.y + platform.h);
+  });
+
+  it("stays put on a one-way platform without down input", () => {
+    const platform = { x: 0, y: 200, w: 1000, h: 12 };
+    actor.x = 100;
+    actor.y = 200 - PLAYER_H;
+    actor.vy = 0;
+    for (let i = 0; i < 30; i++) stepActor(actor, frame, [], [], 16, [platform]);
+    expect(actor.y + PLAYER_H).toBeCloseTo(platform.y, 0);
   });
 
   it("finished actors don't move", () => {

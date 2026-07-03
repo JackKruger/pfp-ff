@@ -22,6 +22,12 @@ let last = 0;
 let raf = 0;
 let reported = false;
 
+// Dev-only introspection hook so browser automation / debugging can read the
+// live FSM state. Vite strips this whole branch from production builds.
+if (import.meta.env.DEV) {
+  Object.defineProperty(window, "__fowl", { get: () => ({ state, launch }) });
+}
+
 client.onLaunch((c) => {
   launch = c;
   state = createGame(c);

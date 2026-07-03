@@ -266,6 +266,10 @@ describe.skipIf(skipReason)("fowl-play e2e (headless browser)", () => {
         { timeout: 5000 },
       );
 
+      // The match starts on the arena-select menu; confirm it with Space
+      // (keyboard fallback confirm for slot 0) so the FSM enters the intro.
+      await page.keyboard.press("Space");
+
       // Hash the full canvas (RGB only, cheap rolling sum) at two points:
       // during the intro screen (which renders the look-around hint panel)
       // and ~6s later when the FSM should be in placement (intro lasts 5s).

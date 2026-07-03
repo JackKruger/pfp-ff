@@ -86,6 +86,16 @@ describe("drawHand", () => {
     const b = drawHand(2, 5).join(",");
     expect(a).not.toBe(b);
   });
+
+  it("never deals duplicate pieces while the pool lasts", () => {
+    for (const seed of [1, 7, 42, 12345]) {
+      const hand = drawHand(seed, 5);
+      expect(new Set(hand).size).toBe(hand.length);
+    }
+    // Even a full-pool hand stays duplicate-free.
+    const full = drawHand(3, HAND_POOL.length);
+    expect(new Set(full).size).toBe(HAND_POOL.length);
+  });
 });
 
 describe("probePlacement", () => {

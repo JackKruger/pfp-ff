@@ -164,6 +164,8 @@ export function advance(state: GameState, frames: PlayerFrame[], dtMs: number): 
 
     case "final": {
       state.phaseTimer = Math.max(0, state.phaseTimer - dtMs);
+      // Any player can skip the awards screen with A.
+      if (frames.some((f) => f.confirmDown)) state.phaseTimer = 0;
       return state.phaseTimer <= 0;
     }
   }

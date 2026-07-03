@@ -307,6 +307,7 @@ function advancePhysics(state: GameState, frames: PlayerFrame[], dtMs: number): 
       if (!actor.alive || actor.finished) continue;
       const frame = frames.find((f) => f.slot === actor.slot);
       if (!frame) continue;
+      const prevVy = actor.vy;
       stepActor(
         actor,
         frame,
@@ -315,6 +316,10 @@ function advancePhysics(state: GameState, frames: PlayerFrame[], dtMs: number): 
         step,
         state.arena.oneWaySolids ?? [],
       );
+      // A large single-step swing to a strongly-upward velocity can only be a
+      // jump or wall jump (gravity/fans move vy far slower, ladder climbs stay
+      // gentler, and landings end at vy = 0, not negative).
+      if (actor.vy < -300 && prevVy - actor.vy > 300) state.soundEvents.push("jump");
     }
     remaining -= step;
     steps++;
@@ -356,10 +361,16 @@ function resolveContacts(state: GameState, dtMs: number): void {
     }
 
     // Pieces: bouncy / conveyor / trampoline post-effects, scorers, hazards.
-    for (const piece of state.pieces) {
+    // Iterate a snapshot — collecting a scorer splices state.pieces, and
+    // mutating the array mid-iteration would skip the following piece.
+    for (const piece of state.pieces.slice()) {
       const def = PIECES[piece.pieceId];
       const aabb = pieceAabb(piece);
       if (!overlaps(contactBounds, aabb)) continue;
+      // "Standing on top" — pads (bouncy/trampoline/conveyor) are solid, so a
+      // resting actor sits a hair above aabb.y; side or underside contact
+      // must not trigger their effects.
+      const onTop = actor.vy >= 0 && actor.y + PLAYER_H <= aabb.y + 2;
 
       switch (piece.pieceId) {
         case "coin":
@@ -367,27 +378,31 @@ function resolveContacts(state: GameState, dtMs: number): void {
           collectScorer(state, actor, piece);
           break;
         case "bouncy":
-          if (actor.vy >= 0) actor.vy = -400;
+          if (onTop) {
+            actor.vy = -400;
+            state.soundEvents.push("jump");
+          }
           break;
         case "trampoline":
-          if (actor.vy >= 0) actor.vy = -600;
+          if (onTop) {
+            actor.vy = -600;
+            state.soundEvents.push("jump");
+          }
           break;
         case "conveyor": {
-          // Standing on top: accelerate horizontally. Direction is rot-dependent.
-          // Scaled by frame dt so the push is consistent across frame rates.
-          const onTop = actor.y + PLAYER_H <= aabb.y + 2;
+          // Carry the actor with the belt like a moving platform. A velocity
+          // nudge would lose the fight against ground friction, so shift
+          // position directly — reverting if the belt would shove the actor
+          // into a solid.
           if (onTop) {
             const dir = piece.rot === 2 ? -1 : 1;
-            actor.vx += dir * 200 * dtSec;
+            moveWithBelt(state, actor, dir * CONVEYOR_BELT_SPEED * dtSec);
           }
           break;
         }
-        case "spike": {
-          // Lethal only from above.
-          const fromAbove = actor.vy > 0 && actor.y + PLAYER_H <= aabb.y + 6;
-          if (fromAbove) killActor(state, actor, piece.placedBy, "spike");
+        case "spike":
+          if (spikeDeadly(piece, actor)) killActor(state, actor, piece.placedBy, "spike");
           break;
-        }
         default:
           if (def.lethal && pieceIsLethal(piece, state.runtime.get(piece.uid))) {
             killActor(state, actor, piece.placedBy, piece.pieceId);
@@ -416,6 +431,51 @@ function resolveContacts(state: GameState, dtMs: number): void {
         state.soundEvents.push("finish");
       }
     }
+  }
+}
+
+/** Belt carry speed for the conveyor, px/s. */
+const CONVEYOR_BELT_SPEED = 110;
+
+/**
+ * Shift an actor horizontally with a conveyor belt, reverting the shift if it
+ * would push them inside a solid (arena or placed piece).
+ */
+function moveWithBelt(state: GameState, actor: RaceActor, shift: number): void {
+  const prevX = actor.x;
+  actor.x += shift;
+  const moved: Aabb = { x: actor.x, y: actor.y, w: PLAYER_W, h: PLAYER_H };
+  for (const s of state.arena.solids) {
+    if (overlaps(moved, s)) {
+      actor.x = prevX;
+      return;
+    }
+  }
+  for (const p of state.pieces) {
+    if (!PIECES[p.pieceId].solid) continue;
+    if (overlaps(moved, pieceAabb(p))) {
+      actor.x = prevX;
+      return;
+    }
+  }
+}
+
+/**
+ * Rotation-aware spike lethality: contact kills unless the actor is moving
+ * away from the pointy side (e.g. jumping up past an upward spike from below,
+ * or running right past a right-pointing wall spike). Standing still in
+ * spikes is always fatal.
+ */
+function spikeDeadly(piece: PlacedPiece, actor: RaceActor): boolean {
+  switch (piece.rot) {
+    case 0:
+      return actor.vy >= 0; // points up — safe only while moving up
+    case 1:
+      return actor.vx <= 0; // points right — safe only while moving right
+    case 2:
+      return actor.vy <= 0; // points down — safe only while falling away
+    default:
+      return actor.vx >= 0; // points left — safe only while moving left
   }
 }
 
@@ -513,6 +573,18 @@ function checkRoundEnd(state: GameState): RoundOutcome | null {
 
 /** Compute per-slot points awarded *this round* and award bonuses. */
 export function finalizeRound(state: GameState, outcome: RoundOutcome): RoundLog {
+  // Movers (mace, pendulum, puck, log, crusher) mutate piece.x/y during the
+  // race. Pieces persist across rounds, so return each one to its placed
+  // position now — otherwise swing pivots and launch points drift a little
+  // further every round.
+  for (const [uid, rt] of state.runtime) {
+    const piece = state.pieces.find((p) => p.uid === uid);
+    if (piece) {
+      piece.x = rt.origX;
+      piece.y = rt.origY;
+    }
+  }
+
   const delta = new Map<number, number>();
   for (const actor of state.actors) delta.set(actor.slot, 0);
 

@@ -278,11 +278,17 @@ describe("bouncy + trampoline", () => {
     const state = makeState(players, [bouncy]);
     beginRace(state);
     tickRace(state, pumpFrames(state), RACE_COUNTDOWN_MS + 1);
+    // Drop onto the pad from just above — bouncy is solid, so landing rests
+    // the actor on top, which is what triggers the bounce.
     state.actors[0].x = 210;
-    state.actors[0].y = 92; // overlapping bouncy
+    state.actors[0].y = 60;
     state.actors[0].vy = 200;
-    tickRace(state, pumpFrames(state), 16);
-    expect(state.actors[0].vy).toBeLessThanOrEqual(-300);
+    let minVy = 0;
+    for (let i = 0; i < 20; i++) {
+      tickRace(state, pumpFrames(state), 16);
+      minVy = Math.min(minVy, state.actors[0].vy);
+    }
+    expect(minVy).toBeLessThanOrEqual(-300);
   });
 
   it("trampoline launches harder than bouncy", () => {
@@ -292,10 +298,36 @@ describe("bouncy + trampoline", () => {
     beginRace(state);
     tickRace(state, pumpFrames(state), RACE_COUNTDOWN_MS + 1);
     state.actors[0].x = 210;
-    state.actors[0].y = 92;
+    state.actors[0].y = 60;
     state.actors[0].vy = 200;
-    tickRace(state, pumpFrames(state), 16);
-    expect(state.actors[0].vy).toBeLessThanOrEqual(-500);
+    let minVy = 0;
+    for (let i = 0; i < 20; i++) {
+      tickRace(state, pumpFrames(state), 16);
+      minVy = Math.min(minVy, state.actors[0].vy);
+    }
+    expect(minVy).toBeLessThanOrEqual(-500);
+  });
+
+  it("side contact with a pad does not launch the actor", () => {
+    // Regression: walking into the side of a bouncy/trampoline used to fling
+    // the player upward, because any inflated-probe overlap with vy >= 0
+    // triggered the bounce.
+    const players = [makePlayer(0)];
+    // Pad sits on the test floor (floor top y=240): pad top at 224.
+    const tramp = makePlaced(1, "trampoline", 300, 224, 0, 1);
+    const state = makeState(players, [tramp]);
+    beginRace(state);
+    tickRace(state, pumpFrames(state), RACE_COUNTDOWN_MS + 1);
+    // Stand on the floor left of the pad and walk right into its side.
+    state.actors[0].x = 250;
+    state.actors[0].y = 240 - 24;
+    state.actors[0].vy = 0;
+    let launched = false;
+    for (let i = 0; i < 60; i++) {
+      tickRace(state, pumpFrames(state, { moveX: 1 }), 16);
+      if (state.actors[0].vy < -100) launched = true;
+    }
+    expect(launched).toBe(false);
   });
 
   it("bounces an actor that falls naturally and rests on the pad", () => {
@@ -319,6 +351,71 @@ describe("bouncy + trampoline", () => {
       if (state.actors[0].vy <= -300) bounced = true;
     }
     expect(bounced).toBe(true);
+  });
+});
+
+describe("conveyor", () => {
+  it("carries a standing actor along the belt", () => {
+    const players = [makePlayer(0)];
+    // Conveyor resting on the test floor (floor top y=240): top at 224.
+    const belt = makePlaced(1, "conveyor", 300, 224, 0, 1);
+    const state = makeState(players, [belt]);
+    beginRace(state);
+    tickRace(state, pumpFrames(state), RACE_COUNTDOWN_MS + 1);
+    state.actors[0].x = 320;
+    state.actors[0].y = 224 - 24;
+    state.actors[0].vx = 0;
+    state.actors[0].vy = 0;
+    const startX = state.actors[0].x;
+    for (let i = 0; i < 40; i++) tickRace(state, pumpFrames(state), 16);
+    // ~0.64s on a 110 px/s belt should carry the actor a meaningful distance.
+    expect(state.actors[0].x).toBeGreaterThan(startX + 40);
+  });
+});
+
+describe("spike lethality", () => {
+  it("kills an actor standing in it (walking through floor spikes)", () => {
+    const players = [makePlayer(0), makePlayer(1)];
+    const spike = makePlaced(1, "spike", 300, 224, 0, 1); // on the floor
+    const state = makeState(players, [spike]);
+    beginRace(state);
+    tickRace(state, pumpFrames(state), RACE_COUNTDOWN_MS + 1);
+    // Standing on the floor, overlapping the spike strip, vy settles to 0.
+    state.actors[0].x = 310;
+    state.actors[0].y = 240 - 24;
+    state.actors[0].vy = 0;
+    tickRace(state, pumpFrames(state), 16);
+    expect(state.actors[0].alive).toBe(false);
+    expect(state.actors[0].killedByCause).toBe("spike");
+  });
+});
+
+describe("jump sound", () => {
+  it("emits 'jump' when a grounded actor jumps", () => {
+    const players = [makePlayer(0)];
+    const state = makeState(players);
+    beginRace(state);
+    tickRace(state, pumpFrames(state), RACE_COUNTDOWN_MS + 1);
+    // Let the actor settle onto the floor.
+    for (let i = 0; i < 30; i++) tickRace(state, pumpFrames(state), 16);
+    state.soundEvents.length = 0;
+    tickRace(state, pumpFrames(state, { jumpDown: true, jumpHeld: true }), 16);
+    expect(state.soundEvents).toContain("jump");
+  });
+
+  it("does not emit 'jump' for a hard landing", () => {
+    const players = [makePlayer(0)];
+    const state = makeState(players);
+    beginRace(state);
+    tickRace(state, pumpFrames(state), RACE_COUNTDOWN_MS + 1);
+    // Drop fast onto the floor (top at y=240) — the abrupt vy 900 → 0 swing
+    // must not read as a jump.
+    state.actors[0].x = 500;
+    state.actors[0].y = 240 - 24 - 40;
+    state.actors[0].vy = 900;
+    state.soundEvents.length = 0;
+    for (let i = 0; i < 10; i++) tickRace(state, pumpFrames(state), 16);
+    expect(state.soundEvents).not.toContain("jump");
   });
 });
 
@@ -423,6 +520,19 @@ describe("finalizeRound", () => {
     finalizeRound(state, "all_finished");
     expect(players[0].score.roundsWon).toBe(1);
     expect(players[1].score.roundsWon).toBe(0);
+  });
+
+  it("restores mover pieces to their placed positions", () => {
+    const players = [makePlayer(0)];
+    const mace = makePlaced(1, "mace", 400, 120, 0, 0);
+    const state = makeState(players, [mace]);
+    beginRace(state);
+    // Simulate the swing having moved the piece during the race.
+    mace.x = 470;
+    mace.y = 190;
+    finalizeRound(state, "timeout");
+    expect(mace.x).toBe(400);
+    expect(mace.y).toBe(120);
   });
 
   it("doesn't crown a round winner if the top delta ties", () => {
