@@ -22,7 +22,7 @@ import {
 } from "../constants.js";
 import { overlaps } from "../physics/aabb.js";
 import { stepActor } from "../physics/player.js";
-import { initRuntimeFor, pieceIsLethal, tickMovers } from "../pieces/movers.js";
+import { armCrumble, initRuntimeFor, pieceIsLethal, tickMovers } from "../pieces/movers.js";
 import { pieceAabb, PIECES } from "../pieces/registry.js";
 import type {
   Aabb,
@@ -54,6 +54,15 @@ export function beginRace(state: GameState): void {
   for (const piece of state.pieces) {
     const rt = initRuntimeFor(piece);
     if (rt) state.runtime.set(piece.uid, rt);
+  }
+  if (state.pieces.some((p) => p.placedBy >= 0 && p.placedRound === state.round)) {
+    state.soundEvents.push("reveal");
+    state.toasts.push({
+      text: "Traps revealed",
+      color: "#fbbf24",
+      life: TOAST_LIFE_MS,
+      maxLife: TOAST_LIFE_MS,
+    });
   }
   const activePlayers = state.players.filter((p) => p.active);
   // Stagger spawn positions so players don't perfectly overlap. Centered
@@ -146,6 +155,9 @@ function sampleTrails(state: GameState): void {
 
 function tickVfx(state: GameState, dtMs: number): void {
   const dtSec = dtMs / 1000;
+  if ((state.screenShake ?? 0) > 0) {
+    state.screenShake = Math.max(0, (state.screenShake ?? 0) - dtMs * 0.04);
+  }
   for (const f of state.floats) {
     f.life -= dtMs;
     f.y += f.vy * dtSec;
@@ -200,6 +212,10 @@ export function spawnBurst(state: GameState, x: number, y: number, color: string
       maxLife: PARTICLE_LIFE_MS,
     });
   }
+}
+
+export function shakeScreen(state: GameState, amount: number): void {
+  state.screenShake = Math.max(state.screenShake ?? 0, amount);
 }
 
 /**
@@ -369,6 +385,7 @@ export function raceElapsedMs(state: GameState): number {
 
 function advancePhysics(state: GameState, frames: PlayerFrame[], dtMs: number): void {
   // Fixed-timestep with substeps. We always run at least 1 step.
+  const modifiers = activeWorldModifiers(state);
   let remaining = dtMs;
   let steps = 0;
   while (remaining > 0 && steps < MAX_SUBSTEPS) {
@@ -385,6 +402,7 @@ function advancePhysics(state: GameState, frames: PlayerFrame[], dtMs: number): 
         state.pieces,
         step,
         state.arena.oneWaySolids ?? [],
+        modifiers,
       );
       // A large single-step swing to a strongly-upward velocity can only be a
       // jump or wall jump (gravity/fans move vy far slower, ladder climbs stay
@@ -394,6 +412,14 @@ function advancePhysics(state: GameState, frames: PlayerFrame[], dtMs: number): 
     remaining -= step;
     steps++;
   }
+}
+
+function activeWorldModifiers(state: GameState): { gravityMul: number; groundFrictionMul: number } {
+  let gravityMul = 1;
+  let groundFrictionMul = 1;
+  if (state.pieces.some((p) => p.pieceId === "lowGravity")) gravityMul *= 0.62;
+  if (state.pieces.some((p) => p.pieceId === "slipperyWorld")) groundFrictionMul *= 0.28;
+  return { gravityMul, groundFrictionMul };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -470,6 +496,9 @@ function resolveContacts(state: GameState, dtMs: number): void {
           }
           break;
         }
+        case "crumble":
+          if (onTop) armCrumble(piece, state.runtime.get(piece.uid));
+          break;
         case "spike":
           if (spikeDeadly(piece, actor)) killActor(state, actor, piece.placedBy, "spike");
           break;
@@ -498,6 +527,8 @@ function resolveContacts(state: GameState, dtMs: number): void {
           life: GOAL_PULSE_LIFE_MS,
           maxLife: GOAL_PULSE_LIFE_MS,
         });
+        spawnBurst(state, actor.x + PLAYER_W / 2, actor.y + PLAYER_H / 2, player.color);
+        shakeScreen(state, 5);
         state.soundEvents.push("finish");
       }
     }
@@ -589,6 +620,7 @@ function killActor(
   if (dying) {
     dying.score.deaths++;
     spawnBurst(state, actor.x + PLAYER_W / 2, actor.y + PLAYER_H / 2, dying.color);
+    shakeScreen(state, 14);
   }
 
   // Screen-space toast announcing the cause.

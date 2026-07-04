@@ -49,6 +49,9 @@ const PUCK_FRICTION = 0.9995;
 const PUCK_MIN_SPEED = 50;
 const PUCK_LIFETIME_MS = 60_000;
 
+const CRUMBLE_WARN_MS = 350;
+const CRUMBLE_BREAK_MS = 700;
+
 /* -------------------------------------------------------------------------- */
 /*  Init                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -101,6 +104,17 @@ export function initRuntimeFor(piece: PlacedPiece): RuntimePiece | null {
         vy: 0,
         active: true,
       };
+    case "crumble":
+      return {
+        uid: piece.uid,
+        origX: piece.x,
+        origY: piece.y,
+        t: 0,
+        state: "solid",
+        vx: 0,
+        vy: 0,
+        active: true,
+      };
     case "puck": {
       const dir = directionOf(piece.rot);
       return {
@@ -146,6 +160,9 @@ export function tickMovers(state: GameState, dtMs: number): void {
       case "puck":
         tickPuck(piece, rt, dtMs, state);
         break;
+      case "crumble":
+        tickCrumble(piece, rt, state);
+        break;
     }
   }
 }
@@ -179,7 +196,11 @@ function tickCrusher(
   }
 
   // Impact dust on the first frame of the "down" state.
-  if (prev === "dropping" && rt.state === "down") emitCrusherDust(piece, state);
+  if (prev === "dropping" && rt.state === "down") {
+    emitCrusherDust(piece, state);
+    bumpShake(state, 10);
+    state.soundEvents.push("impact");
+  }
 }
 
 function emitCrusherDust(piece: PlacedPiece, state: GameState): void {
@@ -305,6 +326,30 @@ function tickPuck(piece: PlacedPiece, rt: RuntimePiece, dtMs: number, state: Gam
       break;
     }
   }
+}
+
+function tickCrumble(piece: PlacedPiece, rt: RuntimePiece, state: GameState): void {
+  if (rt.state === "solid") return;
+  if (rt.state === "crumbling" && rt.t >= CRUMBLE_WARN_MS) {
+    rt.state = "breaking";
+  }
+  if (rt.t >= CRUMBLE_BREAK_MS) {
+    rt.state = "gone";
+    rt.active = false;
+    piece.y = state.arena.killLineY + 10_000;
+    bumpShake(state, 6);
+    state.soundEvents.push("impact");
+  }
+}
+
+function bumpShake(state: GameState, amount: number): void {
+  state.screenShake = Math.max(state.screenShake ?? 0, amount);
+}
+
+export function armCrumble(piece: PlacedPiece, rt: RuntimePiece | undefined): void {
+  if (piece.pieceId !== "crumble" || !rt || rt.state !== "solid") return;
+  rt.state = "crumbling";
+  rt.t = 0;
 }
 
 /* -------------------------------------------------------------------------- */

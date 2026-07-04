@@ -33,6 +33,7 @@ export const WALL_JUMP_VY = 700;
 
 // Phase timing (ms)
 export const PLACEMENT_MS = 30_000;
+export const PLACEMENT_STRAGGLER_MS = 5_000;
 export const RACE_COUNTDOWN_MS = 3_000;
 export const RACE_MAX_MS = 60_000;
 export const SCORE_MS = 5_000;

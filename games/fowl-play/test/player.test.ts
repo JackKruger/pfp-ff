@@ -226,6 +226,24 @@ describe("player physics", () => {
     expect(vxIce).toBeGreaterThan(150); // ice keeps you sliding
   });
 
+  it("honey caps ground speed", () => {
+    const pieces = Array.from({ length: 14 }, (_, i) =>
+      makePlaced(i + 1, "honey", i * 64, 344, 0, 0),
+    );
+    actor.y = 300;
+    const right: PlayerFrame = { ...frame, moveX: 1 };
+    for (let i = 0; i < 90; i++) stepActor(actor, right, [], pieces, 16);
+    expect(actor.vx).toBeLessThan(WALK_MAX * 0.55);
+  });
+
+  it("low-gravity modifier reduces gravity applied to actors", () => {
+    const normal = makeActor();
+    const floaty = makeActor();
+    stepActor(normal, frame, [], [], 16);
+    stepActor(floaty, frame, [], [], 16, [], { gravityMul: 0.62 });
+    expect(floaty.vy).toBeLessThan(normal.vy);
+  });
+
   it("holding down drops through a one-way platform", () => {
     const platform = { x: 0, y: 200, w: 1000, h: 12 };
     actor.x = 100;

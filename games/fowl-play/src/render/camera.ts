@@ -20,11 +20,12 @@ export function makeCamera(): CameraState {
 
 /**
  * Compute the desired camera (focus + zoom) given the current game state.
- * Race phase: dynamic zoom-to-fit on alive actors + start + goal. Other
- * phases: show the full arena bounds.
+ * Race phase: dynamic zoom-to-fit on the racing group. Other phases: show the
+ * full arena bounds.
  */
 export function targetFor(state: GameState): CameraState {
   if (state.phase === "race") return targetFromActors(state);
+  if (state.phase === "final") return targetFromFinal(state);
   return targetFromAabb(state.arena.bounds);
 }
 
@@ -37,18 +38,39 @@ export function lerpCamera(current: CameraState, target: CameraState): CameraSta
 }
 
 function targetFromActors(state: GameState): CameraState {
-  const actors = state.actors.filter((a) => a.alive);
-  const points: { x: number; y: number }[] = [
-    { x: state.arena.start.x, y: state.arena.start.y },
-    { x: state.arena.goal.x, y: state.arena.goal.y },
-    { x: state.arena.goal.x + state.arena.goal.w, y: state.arena.goal.y + state.arena.goal.h },
-  ];
+  const racing = state.actors.filter((a) => a.alive && !a.finished);
+  const fallback = state.actors.filter((a) => a.alive || a.deathPos);
+  const actors = racing.length ? racing : fallback;
+  if (!actors.length) return targetFromAabb(state.arena.bounds);
+
+  const points: { x: number; y: number }[] = [];
   for (const a of actors) {
-    points.push({ x: a.x, y: a.y });
-    points.push({ x: a.x + 24, y: a.y + 24 });
+    const x = a.alive ? a.x : (a.deathPos?.x ?? a.x);
+    const y = a.alive ? a.y : (a.deathPos?.y ?? a.y);
+    points.push({ x, y });
+    points.push({ x: x + 24, y: y + 24 });
   }
   const aabb = aabbOfPoints(points);
   return targetFromAabb(grow(aabb, CAM_PADDING));
+}
+
+function targetFromFinal(state: GameState): CameraState {
+  const winner = state.players.reduce(
+    (best, p) => (!best || p.score.finalScore > best.score.finalScore ? p : best),
+    state.players[0] ?? null,
+  );
+  const actor = winner ? state.actors.find((a) => a.slot === winner.slot) : null;
+  const focusX = actor
+    ? actor.alive
+      ? actor.x + 12
+      : (actor.deathPos?.x ?? actor.x) + 12
+    : state.arena.goal.x + state.arena.goal.w / 2;
+  const focusY = actor
+    ? actor.alive
+      ? actor.y + 12
+      : (actor.deathPos?.y ?? actor.y) + 12
+    : state.arena.goal.y + state.arena.goal.h / 2;
+  return targetFromAabb(grow({ x: focusX - 180, y: focusY - 120, w: 360, h: 240 }, 0));
 }
 
 function targetFromAabb(aabb: Aabb): CameraState {

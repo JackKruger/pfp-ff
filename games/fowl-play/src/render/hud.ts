@@ -6,8 +6,6 @@ import {
   URGENCY_THRESHOLD_MS,
 } from "../constants.js";
 import { computeAwards } from "../awards.js";
-import { PIECES } from "../pieces/registry.js";
-import { pieceForCursor } from "../phases/placement.js";
 import { countdownRemainingMs, raceElapsedMs, raceIsCountdown } from "../phases/race.js";
 import { computeStandings } from "../phases/score.js";
 import type { GameState, RoundOutcome } from "../types.js";
@@ -22,6 +20,7 @@ export function drawHud(
 ): void {
   drawPlayerChips(ctx, state, cw);
   drawBanner(ctx, state, cw);
+  drawModifierBadges(ctx, state, cw);
   drawPhaseBanner(ctx, state, cw, ch);
 
   if (state.phase === "race" && raceIsCountdown(state)) drawCountdown(ctx, state, cw, ch);
@@ -29,6 +28,7 @@ export function drawHud(
   if (state.phase === "final") drawFinalOverlay(ctx, state, cw, ch);
   if (state.phase === "intro" && state.showLookAroundHint) drawLookAroundHint(ctx, cw, ch);
   drawToasts(ctx, state, cw, ch);
+  drawUrgencyVignette(ctx, state, cw, ch);
   if (state.paused) drawPauseOverlay(ctx, cw, ch);
 }
 
@@ -62,6 +62,25 @@ function drawToasts(
   ctx.textBaseline = "alphabetic";
 }
 
+function drawUrgencyVignette(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  cw: number,
+  ch: number,
+): void {
+  const active =
+    (state.phase === "placement" || (state.phase === "race" && !raceIsCountdown(state))) &&
+    state.phaseTimer > 0 &&
+    state.phaseTimer <= URGENCY_THRESHOLD_MS;
+  if (!active) return;
+  const pulse = 0.45 + 0.25 * Math.sin(Date.now() / 100);
+  const g = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.25, cw / 2, ch / 2, Math.max(cw, ch) * 0.72);
+  g.addColorStop(0, "rgba(239,68,68,0)");
+  g.addColorStop(1, `rgba(239,68,68,${pulse})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, cw, ch);
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Top chips                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -84,30 +103,57 @@ function drawPlayerChips(ctx: CanvasRenderingContext2D, state: GameState, cw: nu
       ctx.fillStyle = p.color;
       ctx.fillRect(x, y, 6, chipH);
     }
+    const portraitX = x + 28;
+    const textX = ready(IMG.chicken) ? x + 52 : x + 16;
+    if (ready(IMG.chicken)) {
+      ctx.drawImage(tinted(IMG.chicken, p.color), portraitX - 15, y + 13, 30, 30);
+    }
     ctx.fillStyle = "#e2e8f0";
     ctx.font = "600 14px system-ui, sans-serif";
     ctx.textBaseline = "top";
-    ctx.fillText(p.displayName ?? `P${p.slot + 1}`, x + 16, y + 8);
+    ctx.fillText(p.displayName ?? `P${p.slot + 1}`, textX, y + 8, chipW - (textX - x) - 12);
     ctx.font = "600 20px system-ui, sans-serif";
-    ctx.fillText(`${p.score.finalScore}`, x + 16, y + 28);
+    ctx.fillText(`${p.score.finalScore}`, textX, y + 28);
     ctx.font = "500 12px system-ui, sans-serif";
     ctx.fillStyle = "#94a3b8";
-    ctx.fillText(`🪙 ${p.score.coinsCollected}`, x + 80, y + 32);
+    ctx.fillText(`🪙 ${p.score.coinsCollected}`, textX + 64, y + 32);
 
     if (state.phase === "placement") {
       const cursor = state.cursors.find((c) => c.slot === p.slot);
       if (cursor) {
-        const piece = PIECES[pieceForCursor(cursor)];
         ctx.font = "500 12px system-ui, sans-serif";
         ctx.fillStyle = cursor.confirmed ? "#22c55e" : "#f59e0b";
-        const label = cursor.confirmed
-          ? "READY"
-          : `${piece.name} (${cursor.handIdx + 1}/${cursor.hand.length})`;
+        const label = cursor.confirmed ? "READY" : "CHOOSING";
         // Clamp to the chip so long piece names don't spill past its edge.
-        ctx.fillText(label, x + 100, y + 8, chipW - 116);
+        ctx.fillText(label, x + chipW - 94, y + 8, 82);
       }
     }
   }
+}
+
+function drawModifierBadges(ctx: CanvasRenderingContext2D, state: GameState, cw: number): void {
+  const modifiers = [...new Set(state.pieces
+    .filter((p) => p.pieceId === "lowGravity" || p.pieceId === "slipperyWorld")
+    .map((p) => p.pieceId))];
+  if (!modifiers.length) return;
+
+  const badgeH = 26;
+  let x = cw - 16;
+  const y = 82;
+  ctx.textBaseline = "middle";
+  ctx.font = "700 12px system-ui, sans-serif";
+  for (let i = modifiers.length - 1; i >= 0; i--) {
+    const id = modifiers[i];
+    const label = id === "lowGravity" ? "LOW GRAV" : "SLIPPERY";
+    const w = Math.ceil(ctx.measureText(label).width) + 28;
+    x -= w;
+    ctx.fillStyle = id === "lowGravity" ? "rgba(124,58,237,0.85)" : "rgba(14,116,144,0.85)";
+    ctx.fillRect(x, y, w, badgeH);
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillText(label, x + 14, y + badgeH / 2);
+    x -= 8;
+  }
+  ctx.textBaseline = "alphabetic";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -495,4 +541,3 @@ function drawPauseOverlay(ctx: CanvasRenderingContext2D, cw: number, ch: number)
   ctx.textAlign = "start";
   ctx.textBaseline = "alphabetic";
 }
-

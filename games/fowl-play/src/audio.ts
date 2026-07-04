@@ -70,6 +70,13 @@ export class FowlAudio {
       case "go":
         this.beep({ freq: 990, sweepTo: 1320, ms: 320, type: "square", gain: 0.24 });
         break;
+      case "reveal":
+        this.beep({ freq: 392, sweepTo: 784, ms: 120, type: "triangle", gain: 0.18 });
+        this.beep({ freq: 784, sweepTo: 1175, ms: 180, type: "triangle", gain: 0.18, delay: 80 });
+        break;
+      case "impact":
+        this.beep({ freq: 90, sweepTo: 45, ms: 160, type: "sawtooth", gain: 0.22 });
+        break;
       case "win":
         // Fanfare.
         this.beep({ freq: 523, sweepTo: 523, ms: 140, type: "triangle", gain: 0.25 });

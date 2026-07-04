@@ -143,4 +143,16 @@ describe("FSM-driven sound events", () => {
     advance(state, pump(state), SCORE_MS + 16);
     expect(state.soundEvents).toContain("win");
   });
+
+  it("emits 'reveal' when a race starts with hidden current-round pieces", () => {
+    const state = buildTestState({
+      players: [buildPlayer(0)],
+      phase: "placement",
+      round: 3,
+      pieces: [makePlaced(1, "plank", 100, 100, 0, 0, 3)],
+    });
+    beginRace(state);
+    expect(state.soundEvents).toContain("reveal");
+    expect(state.toasts.some((t) => t.text === "Traps revealed")).toBe(true);
+  });
 });

@@ -6,7 +6,7 @@ import type { Aabb, PieceDef, PieceId, PlacedPiece, Rot } from "../types.js";
  * phase; this registry is the source of truth for size + flags.
  */
 export const PIECES: Record<PieceId, PieceDef> = {
-  // Platforms (5)
+  // Platforms
   plank: {
     id: "plank",
     category: "platform",
@@ -31,6 +31,18 @@ export const PIECES: Record<PieceId, PieceDef> = {
     lethal: false,
     rotatable: false,
   },
+  stairs: {
+    id: "stairs",
+    category: "platform",
+    w: 64,
+    h: 48,
+    name: "Stairs",
+    blurb: "A stepped climb piece for tighter builds.",
+    inHand: true,
+    solid: true,
+    lethal: false,
+    rotatable: true,
+  },
   ice: {
     id: "ice",
     category: "platform",
@@ -43,6 +55,18 @@ export const PIECES: Record<PieceId, PieceDef> = {
     lethal: false,
     rotatable: true,
   },
+  honey: {
+    id: "honey",
+    category: "platform",
+    w: 64,
+    h: 16,
+    name: "Honey Strip",
+    blurb: "Sticky footing. Slows runners down.",
+    inHand: true,
+    solid: true,
+    lethal: false,
+    rotatable: true,
+  },
   bouncy: {
     id: "bouncy",
     category: "platform",
@@ -50,6 +74,18 @@ export const PIECES: Record<PieceId, PieceDef> = {
     h: 16,
     name: "Bouncy Platform",
     blurb: "Bounces you up a notch on contact.",
+    inHand: true,
+    solid: true,
+    lethal: false,
+    rotatable: true,
+  },
+  crumble: {
+    id: "crumble",
+    category: "platform",
+    w: 80,
+    h: 16,
+    name: "Crumble Platform",
+    blurb: "Breaks shortly after someone steps on it.",
     inHand: true,
     solid: true,
     lethal: false,
@@ -206,6 +242,32 @@ export const PIECES: Record<PieceId, PieceDef> = {
     rotatable: false,
   },
 
+  // Party modifiers
+  lowGravity: {
+    id: "lowGravity",
+    category: "modifier",
+    w: 48,
+    h: 48,
+    name: "Low Gravity",
+    blurb: "Global modifier: floatier jumps for the rest of the match.",
+    inHand: true,
+    solid: false,
+    lethal: false,
+    rotatable: false,
+  },
+  slipperyWorld: {
+    id: "slipperyWorld",
+    category: "modifier",
+    w: 48,
+    h: 48,
+    name: "Slippery World",
+    blurb: "Global modifier: everyone slides more.",
+    inHand: true,
+    solid: false,
+    lethal: false,
+    rotatable: false,
+  },
+
   // Scorers — arena-placed only
   coin: {
     id: "coin",
@@ -259,6 +321,7 @@ export function makePlaced(
   y: number,
   rot: Rot,
   placedBy: number,
+  placedRound = 0,
 ): PlacedPiece {
-  return { uid, pieceId, x, y, rot, placedBy };
+  return { uid, pieceId, x, y, rot, placedBy, placedRound };
 }

@@ -8,7 +8,7 @@ import {
   probePlacement,
   tickPlacement,
 } from "../src/phases/placement.js";
-import { HAND_POOL, makePlaced } from "../src/pieces/registry.js";
+import { HAND_POOL, PIECES, makePlaced } from "../src/pieces/registry.js";
 import {
   makeEmptyPlayerScore,
   makeFrame,
@@ -82,6 +82,13 @@ describe("drawHand", () => {
   it("draws only from the in-hand pool", () => {
     const hand = drawHand(7, 30);
     for (const id of hand) expect(HAND_POOL).toContain(id);
+  });
+
+  it("includes the expanded UCH-style build pieces and modifiers", () => {
+    for (const id of ["stairs", "honey", "crumble", "lowGravity", "slipperyWorld"] as const) {
+      expect(HAND_POOL).toContain(id);
+      expect(PIECES[id].inHand).toBe(true);
+    }
   });
 
   it("varies output across seeds", () => {
@@ -255,6 +262,7 @@ describe("tickPlacement", () => {
     expect(c.confirmed).toBe(true);
     expect(c.lastPlacedUid).not.toBeNull();
     expect(state.pieces.length).toBe(1);
+    expect(state.pieces[0].placedRound).toBe(state.round);
     expect(players[0].score.trapsPlaced).toBe(1);
     expect(players[0].score.piecesByType.plank).toBe(1);
   });
@@ -319,6 +327,23 @@ describe("tickPlacement", () => {
       16,
     );
     expect(done).toBe(true);
+  });
+
+  it("cuts the timer to five seconds when only one player is unready", () => {
+    const state = makeState([makePlayer(0), makePlayer(1), makePlayer(2)]);
+    beginPlacement(state, 1);
+    state.phaseTimer = 20_000;
+    const done = tickPlacement(
+      state,
+      [
+        { ...makeFrame(0), startDown: true },
+        { ...makeFrame(1), startDown: true },
+        makeFrame(2),
+      ],
+      16,
+    );
+    expect(done).toBe(false);
+    expect(state.phaseTimer).toBe(5_000);
   });
 
   it("returns true once the timer hits zero", () => {

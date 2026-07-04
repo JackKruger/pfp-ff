@@ -89,6 +89,81 @@ describe("camera", () => {
     expect(t.zoom).toBeLessThanOrEqual(CAM_ZOOM_MAX);
   });
 
+  it("final camera focuses near the leading player's last actor", () => {
+    const state = makeBaseState();
+    state.phase = "final";
+    state.players = [
+      {
+        slot: 0,
+        profileId: null,
+        displayName: "P1",
+        color: "#fff",
+        gamepadIndex: 0,
+        active: true,
+        score: {
+          finalScore: 1,
+          roundsWon: 0,
+          finishes: 0,
+          deaths: 0,
+          coinsCollected: 0,
+          diamondsCollected: 0,
+          killsCaused: 0,
+          loneSurvivor: 0,
+          trapsPlaced: 0,
+          selfKills: 0,
+          piecesByType: {},
+        },
+      },
+      {
+        slot: 1,
+        profileId: null,
+        displayName: "P2",
+        color: "#fff",
+        gamepadIndex: 1,
+        active: true,
+        score: {
+          finalScore: 9,
+          roundsWon: 0,
+          finishes: 0,
+          deaths: 0,
+          coinsCollected: 0,
+          diamondsCollected: 0,
+          killsCaused: 0,
+          loneSurvivor: 0,
+          trapsPlaced: 0,
+          selfKills: 0,
+          piecesByType: {},
+        },
+      },
+    ];
+    state.actors = [
+      {
+        slot: 1,
+        x: 900,
+        y: 220,
+        vx: 0,
+        vy: 0,
+        alive: true,
+        finished: false,
+        finishedAt: 0,
+        diedAt: 0,
+        deathPos: null,
+        killedBy: -1,
+        killedByCause: null,
+        contact: "none",
+        timeSinceGrounded: 0,
+        jumpBuffer: 0,
+        jumpHeld: false,
+        jumpAge: 0,
+        roundCoins: 0,
+        diamondsThisRound: 0,
+      },
+    ];
+    const t = targetFor(state);
+    expect(t.x).toBeCloseTo(912, 0);
+    expect(t.y).toBeCloseTo(232, 0);
+  });
+
   it("lerpCamera moves CAM_LERP of the way toward target", () => {
     const cam = { x: 0, y: 0, zoom: 1 };
     const out = lerpCamera(cam, { x: 100, y: 200, zoom: 0.5 });

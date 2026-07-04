@@ -138,6 +138,7 @@ describe("scoring events spawn VFX", () => {
     state.actors[0].y = state.arena.killLineY + 100;
     tickRace(state, pump(1), 16);
     expect(state.particles.some((p) => p.color === "#3b82f6")).toBe(true);
+    expect(state.screenShake).toBeGreaterThan(0);
   });
 
   it("lone-survivor finalizeRound spawns a bonus float", () => {
@@ -151,5 +152,20 @@ describe("scoring events spawn VFX", () => {
     state.actors[1].killedBy = -1;
     finalizeRound(state, "all_finished");
     expect(state.floats.some((f) => f.text.includes("LONE SURVIVOR"))).toBe(true);
+  });
+
+  it("finishing spawns a color burst and a light shake", () => {
+    const state = buildTestState({
+      players: [buildPlayer(0, { color: "#22c55e" })],
+      phase: "race",
+    });
+    state.arena.goal = { x: 0, y: 0, w: 32, h: 32 };
+    beginRace(state);
+    state.phaseTimer = RACE_MAX_MS;
+    state.actors[0].x = 8;
+    state.actors[0].y = 8;
+    tickRace(state, pump(1), 16);
+    expect(state.particles.some((p) => p.color === "#22c55e")).toBe(true);
+    expect(state.screenShake).toBeGreaterThan(0);
   });
 });

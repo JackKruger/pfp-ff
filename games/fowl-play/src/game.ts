@@ -207,11 +207,15 @@ function beginFinal(state: GameState): void {
   state.particles = [];
   state.floats = [];
   state.finalConfettiAcc = 0;
+  state.screenShake = Math.max(state.screenShake ?? 0, 12);
   // Burst on entry so the celebration starts feeling alive without a pause.
   emitConfetti(state, 28);
 }
 
 function tickFinalCelebration(state: GameState, dtMs: number): void {
+  if ((state.screenShake ?? 0) > 0) {
+    state.screenShake = Math.max(0, (state.screenShake ?? 0) - dtMs * 0.04);
+  }
   state.finalConfettiAcc += dtMs;
   while (state.finalConfettiAcc >= FINAL_CONFETTI_MS) {
     emitConfetti(state, 6);

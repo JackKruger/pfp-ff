@@ -3,6 +3,7 @@ import {
   _crusher,
   _log,
   _mace,
+  armCrumble,
   initRuntimeFor,
   pieceIsLethal,
   tickMovers,
@@ -157,6 +158,25 @@ describe("puck", () => {
     state.runtime.set(piece2.uid, initRuntimeFor(piece2)!);
     tickMovers(state, 16);
     expect(piece2.x).toBeLessThan(300);
+  });
+});
+
+describe("crumble platform", () => {
+  it("breaks after being armed and moves out of play", () => {
+    const state = emptyState();
+    const piece = makePlaced(1, "crumble", 100, 300, 0, 0);
+    state.pieces.push(piece);
+    state.runtime.set(piece.uid, initRuntimeFor(piece)!);
+
+    armCrumble(piece, state.runtime.get(piece.uid));
+    tickMovers(state, 800);
+
+    const rt = state.runtime.get(piece.uid)!;
+    expect(rt.state).toBe("gone");
+    expect(rt.active).toBe(false);
+    expect(piece.y).toBeGreaterThan(state.arena.killLineY);
+    expect(state.screenShake).toBeGreaterThan(0);
+    expect(state.soundEvents).toContain("impact");
   });
 });
 

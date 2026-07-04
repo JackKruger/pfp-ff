@@ -21,13 +21,22 @@ export interface Aabb {
 /*  Pieces                                                                    */
 /* -------------------------------------------------------------------------- */
 
-export type PieceCategory = "platform" | "hazard" | "mover" | "helper" | "scorer";
+export type PieceCategory =
+  | "platform"
+  | "hazard"
+  | "mover"
+  | "helper"
+  | "modifier"
+  | "scorer";
 
 export type PieceId =
   | "plank"
   | "block"
+  | "stairs"
   | "ice"
+  | "honey"
   | "bouncy"
+  | "crumble"
   | "conveyor"
   | "spike"
   | "saw"
@@ -40,6 +49,8 @@ export type PieceId =
   | "log"
   | "trampoline"
   | "ladder"
+  | "lowGravity"
+  | "slipperyWorld"
   // arena-placed scorers; not in player hand
   | "coin"
   | "diamond";
@@ -77,6 +88,8 @@ export interface PlacedPiece {
   rot: Rot;
   /** Slot of the player who placed it, or -1 if arena-placed. */
   placedBy: number;
+  /** Round when this piece was committed; used to hide only fresh placements. */
+  placedRound?: number;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -235,6 +248,8 @@ export interface RaceActor {
   jumpAge: number;
   /** Friction multiplier of the surface currently stood on (ice < 1). */
   groundFrictionMul?: number;
+  /** Speed multiplier of the surface currently stood on (honey < 1). */
+  groundSpeedMul?: number;
   /** Coins collected this round. */
   roundCoins: number;
   diamondsThisRound: number;
@@ -321,6 +336,8 @@ export type SoundEvent =
   | "loneSurvivor"
   | "countdownTick"
   | "go"
+  | "reveal"
+  | "impact"
   | "win";
 
 /* -------------------------------------------------------------------------- */
@@ -402,6 +419,8 @@ export interface GameState {
   pendingHandSeed: number;
   /** Accumulator (ms) driving confetti cadence in the final phase. */
   finalConfettiAcc: number;
+  /** Optional transient camera shake amount in logical pixels. */
+  screenShake?: number;
 }
 
 /* -------------------------------------------------------------------------- */

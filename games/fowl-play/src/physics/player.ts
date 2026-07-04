@@ -39,6 +39,13 @@ export interface MoveResult {
   hitCeiling: boolean;
   /** Per-frame friction modifier from the surface the actor is standing on. */
   groundFrictionMul: number;
+  /** Per-frame max-speed modifier from the surface the actor is standing on. */
+  groundSpeedMul: number;
+}
+
+export interface StepOptions {
+  gravityMul?: number;
+  groundFrictionMul?: number;
 }
 
 const SLOP = 0.001;
@@ -50,6 +57,7 @@ export function stepActor(
   pieces: PlacedPiece[],
   dtMs: number,
   oneWaySolids: Aabb[] = [],
+  options: StepOptions = {},
 ): MoveResult {
   if (!actor.alive || actor.finished) {
     return {
@@ -58,6 +66,7 @@ export function stepActor(
       hitRightWall: false,
       hitCeiling: false,
       groundFrictionMul: 1,
+      groundSpeedMul: 1,
     };
   }
 
@@ -70,12 +79,13 @@ export function stepActor(
     actor.vx += wantX * accel * FIXED_DT;
   } else if (grounded) {
     // Friction toward 0, scaled by the surface we're standing on (ice slides).
-    const frictionMul = actor.groundFrictionMul ?? 1;
+    const frictionMul = (actor.groundFrictionMul ?? 1) * (options.groundFrictionMul ?? 1);
     const sign = Math.sign(actor.vx);
     actor.vx -= sign * GROUND_FRICTION * frictionMul * FIXED_DT;
     if (Math.sign(actor.vx) !== sign) actor.vx = 0;
   }
-  actor.vx = clamp(actor.vx, -WALK_MAX, WALK_MAX);
+  const speedMul = grounded ? (actor.groundSpeedMul ?? 1) : 1;
+  actor.vx = clamp(actor.vx, -WALK_MAX * speedMul, WALK_MAX * speedMul);
 
   // --- Jump input + variable-cut -------------------------------------------
   actor.jumpBuffer = Math.max(0, actor.jumpBuffer - dtMs);
@@ -132,7 +142,7 @@ export function stepActor(
     const slidingWall =
       wallSide !== 0 && actor.vy > 0 && Math.sign(wantX) === wallSide;
     const gMul = slidingWall ? WALL_SLIDE_GRAVITY_MUL : 1;
-    actor.vy += GRAVITY * gMul * FIXED_DT;
+    actor.vy += GRAVITY * (options.gravityMul ?? 1) * gMul * FIXED_DT;
     const fallCap = slidingWall ? WALL_SLIDE_MAX : MAX_FALL;
     if (actor.vy > fallCap) actor.vy = fallCap;
   }
@@ -142,13 +152,18 @@ export function stepActor(
   const dy = actor.vy * FIXED_DT;
   const bounds: Aabb = { x: actor.x, y: actor.y, w: PLAYER_W, h: PLAYER_H };
 
-  const allSolids: { aabb: Aabb; frictionMul: number }[] = [];
-  for (const s of solids) allSolids.push({ aabb: s, frictionMul: 1 });
+  const allSolids: { aabb: Aabb; frictionMul: number; speedMul: number }[] = [];
+  for (const s of solids) allSolids.push({ aabb: s, frictionMul: 1, speedMul: 1 });
   for (const p of pieces) {
     const def = PIECES[p.pieceId];
     if (!def.solid) continue;
     const mul = def.id === "ice" ? 200 / GROUND_FRICTION : 1;
-    allSolids.push({ aabb: pieceAabb(p), frictionMul: mul });
+    const honey = def.id === "honey";
+    allSolids.push({
+      aabb: pieceAabb(p),
+      frictionMul: honey ? 2.6 : mul,
+      speedMul: honey ? 0.45 : 1,
+    });
   }
   // One-way platforms become "solid" only when the actor is falling onto them
   // from above. Holding down drops through: the platform is simply excluded
@@ -158,7 +173,7 @@ export function stepActor(
     for (const ow of oneWaySolids) {
       const movingDown = actor.vy >= 0;
       const above = actor.y + PLAYER_H <= ow.y + 2;
-      if (movingDown && above) allSolids.push({ aabb: ow, frictionMul: 1 });
+      if (movingDown && above) allSolids.push({ aabb: ow, frictionMul: 1, speedMul: 1 });
     }
   }
 
@@ -168,6 +183,7 @@ export function stepActor(
 
   // Contact state for next tick
   actor.groundFrictionMul = result.hitGround ? result.groundFrictionMul : 1;
+  actor.groundSpeedMul = result.hitGround ? result.groundSpeedMul : 1;
   if (result.hitGround) {
     actor.vy = 0;
     actor.contact = "ground";
@@ -188,7 +204,7 @@ function resolveMove(
   bounds: Aabb,
   dx: number,
   dy: number,
-  solids: { aabb: Aabb; frictionMul: number }[],
+  solids: { aabb: Aabb; frictionMul: number; speedMul: number }[],
 ): MoveResult {
   let remainingDx = dx;
   let remainingDy = dy;
@@ -197,6 +213,7 @@ function resolveMove(
   let hitLeftWall = false;
   let hitRightWall = false;
   let groundFrictionMul = 1;
+  let groundSpeedMul = 1;
 
   // Up to 4 sub-resolutions (touch -> slide -> touch ...).
   for (let i = 0; i < 4; i++) {
@@ -206,8 +223,9 @@ function resolveMove(
     let earliestNx: -1 | 0 | 1 = 0;
     let earliestNy: -1 | 0 | 1 = 0;
     let earliestFriction = 1;
+    let earliestSpeed = 1;
 
-    for (const { aabb, frictionMul } of solids) {
+    for (const { aabb, frictionMul, speedMul } of solids) {
       const hit = sweep(bounds, remainingDx, remainingDy, aabb);
       if (!hit) continue;
       if (hit.t < earliestT) {
@@ -215,6 +233,7 @@ function resolveMove(
         earliestNx = hit.nx;
         earliestNy = hit.ny;
         earliestFriction = frictionMul;
+        earliestSpeed = speedMul;
       }
     }
 
@@ -230,6 +249,7 @@ function resolveMove(
     if (earliestNy === -1) {
       hitGround = true;
       groundFrictionMul = earliestFriction;
+      groundSpeedMul = earliestSpeed;
     }
     if (earliestNy === 1) hitCeiling = true;
     if (earliestNx === -1) hitRightWall = true;
@@ -243,7 +263,7 @@ function resolveMove(
     else remainingDy *= leftover;
   }
 
-  return { hitGround, hitLeftWall, hitRightWall, hitCeiling, groundFrictionMul };
+  return { hitGround, hitLeftWall, hitRightWall, hitCeiling, groundFrictionMul, groundSpeedMul };
 }
 
 function clamp(n: number, lo: number, hi: number): number {

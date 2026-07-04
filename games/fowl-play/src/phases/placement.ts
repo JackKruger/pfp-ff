@@ -1,4 +1,4 @@
-import { GRID, PLACEMENT_MS } from "../constants.js";
+import { GRID, PLACEMENT_MS, PLACEMENT_STRAGGLER_MS } from "../constants.js";
 import { contains, distToAabb, overlaps } from "../physics/aabb.js";
 import { HAND_POOL, PIECES, makePlaced, pieceAabb } from "../pieces/registry.js";
 import type {
@@ -133,8 +133,16 @@ export function tickPlacement(state: GameState, frames: PlayerFrame[], dtMs: num
     }
   }
 
+  shortenTimerForStraggler(state);
   const allDone = state.cursors.every((c) => c.confirmed);
   return allDone || state.phaseTimer <= 0;
+}
+
+function shortenTimerForStraggler(state: GameState): void {
+  if (state.cursors.length < 2) return;
+  const waiting = state.cursors.filter((c) => !c.confirmed);
+  if (waiting.length !== 1) return;
+  state.phaseTimer = Math.min(state.phaseTimer, PLACEMENT_STRAGGLER_MS);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -179,6 +187,7 @@ function tryPlace(state: GameState, cursor: PlacementCursor): PlacedPiece | null
     ghost.y,
     ghost.rot,
     cursor.slot,
+    state.round,
   );
   state.pieces.push(placed);
   return placed;

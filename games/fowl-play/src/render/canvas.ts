@@ -1,5 +1,5 @@
 import { LOGICAL_H, LOGICAL_W, PLAYER_H, PLAYER_W } from "../constants.js";
-import { ghostFor, probePlacement } from "../phases/placement.js";
+import { probePlacement } from "../phases/placement.js";
 import { bladeTip, raceElapsedMs, sweeperCenter } from "../phases/race.js";
 import { pieceAabb, PIECES } from "../pieces/registry.js";
 import { ARENAS } from "../arenas/index.js";
@@ -41,6 +41,10 @@ export class Renderer {
     this.camera = lerpCamera(this.camera, targetFor(state));
 
     this.ctx.save();
+    const shake = state.screenShake ?? 0;
+    if (shake > 0.1) {
+      this.ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+    }
     const scaleX = cw / LOGICAL_W;
     const scaleY = ch / LOGICAL_H;
     const fit = Math.min(scaleX, scaleY);
@@ -51,6 +55,7 @@ export class Renderer {
     this.drawArena(state);
     if (state.phase === "placement") this.drawPlacementGrid(state);
     this.drawPieces(state);
+    this.drawRevealHighlights(state);
     this.drawArenaDynamics(state);
     this.drawGoalPulses(state);
     this.drawParticles(state);
@@ -213,6 +218,9 @@ export class Renderer {
     const elapsed = inRace ? raceElapsedMs(state) : 0;
 
     for (const p of state.pieces) {
+      if (state.phase === "placement" && p.placedBy >= 0 && p.placedRound === state.round) {
+        continue;
+      }
       const def = PIECES[p.pieceId];
       const aabb = pieceAabb(p);
 
@@ -250,6 +258,24 @@ export class Renderer {
         continue;
       }
 
+      if (p.pieceId === "stairs") {
+        this.drawStairs(aabb, p.rot);
+        continue;
+      }
+      if (p.pieceId === "honey") {
+        this.drawHoney(aabb);
+        continue;
+      }
+      if (p.pieceId === "crumble") {
+        const breaking = state.runtime.get(p.uid)?.state;
+        this.drawCrumble(aabb, breaking === "crumbling" || breaking === "breaking");
+        continue;
+      }
+      if (p.pieceId === "lowGravity" || p.pieceId === "slipperyWorld") {
+        this.drawModifierToken(aabb, p.pieceId);
+        continue;
+      }
+
       // Static sprite (plank/block/spike) rotated to its placement, else a rect.
       const img = pieceImage(p.pieceId);
       if (ready(img)) {
@@ -264,6 +290,29 @@ export class Renderer {
         this.ctx.lineWidth = 2;
         this.ctx.strokeRect(aabb.x, aabb.y, aabb.w, aabb.h);
       }
+    }
+  }
+
+  private drawRevealHighlights(state: GameState): void {
+    if (state.phase !== "race") return;
+    const elapsed = raceElapsedMs(state);
+    if (elapsed > 1100) return;
+    const t = elapsed / 1100;
+    const alpha = 1 - t;
+    for (const p of state.pieces) {
+      if (p.placedBy < 0 || p.placedRound !== state.round) continue;
+      const aabb = pieceAabb(p);
+      const cx = aabb.x + aabb.w / 2;
+      const cy = aabb.y + aabb.h / 2;
+      const r = Math.max(aabb.w, aabb.h) * (0.65 + t * 0.55);
+      this.ctx.save();
+      this.ctx.globalAlpha = alpha;
+      this.ctx.strokeStyle = "#fbbf24";
+      this.ctx.lineWidth = 4;
+      this.ctx.beginPath();
+      this.ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      this.ctx.stroke();
+      this.ctx.restore();
     }
   }
 
@@ -354,6 +403,75 @@ export class Renderer {
     this.ctx.arc(0, 0, rOuter * 0.25, 0, Math.PI * 2);
     this.ctx.fill();
     this.ctx.restore();
+  }
+
+  private drawStairs(aabb: { x: number; y: number; w: number; h: number }, rot: number): void {
+    this.ctx.save();
+    this.ctx.translate(aabb.x + aabb.w / 2, aabb.y + aabb.h / 2);
+    this.ctx.rotate((rot * Math.PI) / 2);
+    const w = rot % 2 === 0 ? aabb.w : aabb.h;
+    const h = rot % 2 === 0 ? aabb.h : aabb.w;
+    this.ctx.translate(-w / 2, -h / 2);
+    this.ctx.fillStyle = "#a8a29e";
+    const steps = 4;
+    for (let i = 0; i < steps; i++) {
+      const sw = w / steps;
+      const sh = (h / steps) * (i + 1);
+      this.ctx.fillRect(i * sw, h - sh, sw, sh);
+    }
+    this.ctx.strokeStyle = "#57534e";
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(0, 0, w, h);
+    this.ctx.restore();
+  }
+
+  private drawHoney(aabb: { x: number; y: number; w: number; h: number }): void {
+    this.ctx.fillStyle = "#f59e0b";
+    this.ctx.fillRect(aabb.x, aabb.y, aabb.w, aabb.h);
+    this.ctx.fillStyle = "rgba(255,255,255,0.35)";
+    for (let x = aabb.x + 6; x < aabb.x + aabb.w; x += 18) {
+      this.ctx.beginPath();
+      this.ctx.arc(x, aabb.y + aabb.h / 2, 4, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+  }
+
+  private drawCrumble(aabb: { x: number; y: number; w: number; h: number }, breaking: boolean): void {
+    this.ctx.fillStyle = breaking ? "#d97706" : "#78716c";
+    this.ctx.fillRect(aabb.x, aabb.y, aabb.w, aabb.h);
+    this.ctx.strokeStyle = breaking ? "#fbbf24" : "#44403c";
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    this.ctx.moveTo(aabb.x + aabb.w * 0.25, aabb.y + 2);
+    this.ctx.lineTo(aabb.x + aabb.w * 0.35, aabb.y + aabb.h - 2);
+    this.ctx.moveTo(aabb.x + aabb.w * 0.62, aabb.y + 2);
+    this.ctx.lineTo(aabb.x + aabb.w * 0.55, aabb.y + aabb.h - 2);
+    this.ctx.stroke();
+  }
+
+  private drawModifierToken(
+    aabb: { x: number; y: number; w: number; h: number },
+    id: "lowGravity" | "slipperyWorld",
+  ): void {
+    const cx = aabb.x + aabb.w / 2;
+    const cy = aabb.y + aabb.h / 2;
+    this.ctx.fillStyle = id === "lowGravity" ? "#8b5cf6" : "#38bdf8";
+    circle(this.ctx, cx, cy, Math.min(aabb.w, aabb.h) / 2);
+    this.ctx.strokeStyle = "#e2e8f0";
+    this.ctx.lineWidth = 3;
+    this.ctx.beginPath();
+    if (id === "lowGravity") {
+      this.ctx.arc(cx, cy, aabb.w * 0.22, Math.PI * 0.25, Math.PI * 1.7);
+      this.ctx.stroke();
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx + 8, cy - 14);
+      this.ctx.lineTo(cx + 16, cy - 8);
+      this.ctx.lineTo(cx + 6, cy - 4);
+    } else {
+      this.ctx.moveTo(cx - 16, cy + 8);
+      this.ctx.bezierCurveTo(cx - 8, cy - 8, cx + 8, cy + 22, cx + 16, cy + 2);
+    }
+    this.ctx.stroke();
   }
 
   private drawActors(state: GameState): void {
@@ -451,18 +569,14 @@ export class Renderer {
       const player = state.players.find((p) => p.slot === cursor.slot);
       const color = player?.color ?? "#ffffff";
 
-      // Ghost piece preview at the snapped position, tinted by validity.
-      const ghost = ghostFor(cursor);
       const probe = probePlacement(state, cursor);
-      const ghostAabb = pieceAabb(ghost);
       this.ctx.save();
-      this.ctx.globalAlpha = 0.45;
-      this.ctx.fillStyle = probe.ok ? color : "#ef4444";
-      this.ctx.fillRect(ghostAabb.x, ghostAabb.y, ghostAabb.w, ghostAabb.h);
       this.ctx.globalAlpha = 0.95;
       this.ctx.strokeStyle = probe.ok ? color : "#ef4444";
       this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(ghostAabb.x, ghostAabb.y, ghostAabb.w, ghostAabb.h);
+      this.ctx.beginPath();
+      this.ctx.arc(cursor.x, cursor.y, 16, 0, Math.PI * 2);
+      this.ctx.stroke();
       this.ctx.restore();
 
       // Cursor reticle on top so the player can find their cursor easily.
@@ -583,10 +697,14 @@ function colorForPiece(id: string): string {
   if (id === "mace" || id === "log") return "#7f1d1d";
   if (id === "fan") return "#94a3b8";
   if (id === "ice") return "#bae6fd";
+  if (id === "honey") return "#f59e0b";
+  if (id === "crumble") return "#78716c";
   if (id === "bouncy" || id === "trampoline") return "#fbbf24";
   if (id === "conveyor") return "#9ca3af";
   if (id === "ladder") return "#a16207";
-  if (id === "pendulum" || id === "plank" || id === "block") return "#a8a29e";
+  if (id === "lowGravity") return "#8b5cf6";
+  if (id === "slipperyWorld") return "#38bdf8";
+  if (id === "pendulum" || id === "plank" || id === "block" || id === "stairs") return "#a8a29e";
   return "#cbd5e1";
 }
 
@@ -595,4 +713,3 @@ function circle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number):
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
 }
-

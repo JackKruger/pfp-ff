@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { HAND_POOL, makePlaced, pieceAabb, PIECES } from "../src/pieces/registry.js";
 
 describe("piece registry", () => {
-  it("exposes 16 player-handable pieces", () => {
-    expect(HAND_POOL.length).toBe(16);
+  it("exposes the expanded player-handable piece library", () => {
+    expect(HAND_POOL.length).toBe(21);
   });
 
   it("every piece def has a non-zero size", () => {
@@ -66,6 +66,7 @@ describe("makePlaced", () => {
       y: 50,
       rot: 2,
       placedBy: 3,
+      placedRound: 0,
     });
   });
 });
@@ -83,5 +84,6 @@ describe("HAND_POOL", () => {
     expect(cats.has("hazard")).toBe(true);
     expect(cats.has("mover")).toBe(true);
     expect(cats.has("helper")).toBe(true);
+    expect(cats.has("modifier")).toBe(true);
   });
 });
