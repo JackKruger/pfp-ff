@@ -10,3 +10,4 @@ export * from "./transport.js";
 export * from "./client.js";
 export * from "./host.js";
 export * from "./mock.js";
+export * from "./validate.js";

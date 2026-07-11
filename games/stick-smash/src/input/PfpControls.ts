@@ -1,4 +1,28 @@
-const NEUTRAL_SNAPSHOT = Object.freeze({
+/**
+ * Maps shell-forwarded control frames (`@pfp/controls`) to the input snapshot
+ * shape upstream Stick Smash expects from an input provider.
+ */
+import type { ControlFrame } from "@pfp/sdk";
+
+export interface StickSmashInputSnapshot {
+  moveX: number;
+  moveY: number;
+  jump: boolean;
+  attack: boolean;
+  grab: boolean;
+  special: boolean;
+  throw: boolean;
+  aimX: number;
+  aimY: number;
+  aimActive: boolean;
+}
+
+/** The slice of a ControlClient the adapter needs (structural, for tests). */
+export interface PfpFrameSource {
+  getLatestFrame?: () => ControlFrame | null;
+}
+
+const NEUTRAL_SNAPSHOT: Readonly<StickSmashInputSnapshot> = Object.freeze({
   moveX: 0,
   moveY: 0,
   jump: false,
@@ -11,16 +35,14 @@ const NEUTRAL_SNAPSHOT = Object.freeze({
   aimActive: false,
 });
 
-export function neutralPfpSnapshot() {
+export function neutralPfpSnapshot(): StickSmashInputSnapshot {
   return { ...NEUTRAL_SNAPSHOT };
 }
 
 export class PfpControls {
-  constructor(source) {
-    this.source = source;
-  }
+  constructor(private readonly source: PfpFrameSource) {}
 
-  getSnapshotForSlot(slot) {
+  getSnapshotForSlot(slot: number): StickSmashInputSnapshot {
     const frame = this.source.getLatestFrame?.();
     const player = frame?.players?.find((candidate) => candidate.slot === slot);
     if (!player) return neutralPfpSnapshot();

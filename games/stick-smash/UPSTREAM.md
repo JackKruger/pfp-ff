@@ -14,10 +14,10 @@ The upstream game source is kept in the `upstream` git submodule and should stay
 standalone. PFP-specific code lives outside that submodule:
 
 - `src/main.js` boots upstream `Game` and wires PFP lifecycle events.
-- `src/pfp/externalMatch.js` adapts shell launches, forwarded input, and match
+- `src/pfp/externalMatch.ts` adapts shell launches, forwarded input, and match
   completion without editing upstream files.
-- `src/input/PfpControls.js` maps PFP control frames to Stick Smash snapshots.
-- `src/pfp/results.js` maps Stick Smash players to PFP standings.
+- `src/input/PfpControls.ts` maps PFP control frames to Stick Smash snapshots.
+- `src/pfp/results.ts` maps Stick Smash players to PFP standings.
 
 The adapter uses generic host hooks from the `pfp/external-host-hooks` upstream
 branch. Once those hooks are merged upstream, move the submodule pointer to the

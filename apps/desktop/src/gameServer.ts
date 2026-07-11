@@ -10,6 +10,7 @@ import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
+import { validateDesktopServerConfig } from "./serverConfig.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -137,6 +138,14 @@ async function startGameServer(
   _event: IpcMainInvokeEvent,
   config: DesktopServerConfig,
 ): Promise<{ url: string }> {
+  // The renderer (and, transitively, same-origin game iframes that can reach
+  // window.parent.pfpDesktop) is untrusted input to this process — validate
+  // before killing anything on the port or spawning anything.
+  const configErrors = validateDesktopServerConfig(config);
+  if (configErrors.length > 0) {
+    throw new Error(`rejected desktop server config: ${configErrors.join("; ")}`);
+  }
+
   if (currentChild) {
     await killChild(currentChild);
     currentChild = null;
