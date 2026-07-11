@@ -27,7 +27,7 @@ const manifest = {
   },
   build: {
     packageName: "@pfp/party-mix",
-    devPort: 5178,
+    devPort: 5181,
     built: false,
   },
 } satisfies GameManifest;

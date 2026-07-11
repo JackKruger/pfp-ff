@@ -218,6 +218,13 @@ function readInput(gamepadIndex: number) {
 }
 ```
 
+**Keyboard-only players have a negative `gamepadIndex`.** The shell's pairing
+screen assigns keyboard players `gamepadIndex = -slot - 1`, which is never a
+valid `navigator.getGamepads()` index (the lookup just returns `undefined`).
+A direct-input game that wants those players to be able to play must detect
+`gamepadIndex < 0` and fall back to its own keyboard bindings for that slot
+(see `games/iron-yard/src/main.ts` for an example).
+
 Button layout (W3C standard mapping, all Xbox controllers):
 
 | Index | Name    | Xbox label                 |
@@ -505,7 +512,7 @@ In `games/your-game/tsconfig.json`:
 - [ ] `games/your-game/index.html` exists and is served at that path
 - [ ] `games/your-game/game.manifest.ts` exists and uses `satisfies GameManifest`
 - [ ] `games/your-game/package.json` has `dev`, `build`, and `typecheck` scripts
-- [ ] Manifest wired into `apps/shell/src/games.ts` until catalog generation exists
+- [ ] Shell catalog regenerated with `pnpm generate:game-catalog` (checked by `pnpm build`)
 - [ ] Enabled production game id added to `apps/shell/src/buildGames.ts`
 - [ ] Root `pnpm dev` updated, or the game dev server is started separately
 - [ ] Game calls `client.ready()` (or posts `{ channel:"pfp", type:"ready", payload:{sdkVersion:"1.0.0"} }`)

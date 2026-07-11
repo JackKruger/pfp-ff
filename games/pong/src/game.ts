@@ -311,8 +311,7 @@ function steerCpu(state: GameState): void {
     const ball = state.ball;
     const towardCpu = idx === 1 ? ball.vx > 0 : ball.vx < 0;
     // Chase the ball only while it's incoming; otherwise recover to center.
-    const targetY =
-      state.phase === "rally" && towardCpu ? ball.y + BALL_SIZE / 2 : ARENA_H / 2;
+    const targetY = state.phase === "rally" && towardCpu ? ball.y + BALL_SIZE / 2 : ARENA_H / 2;
     const diff = targetY - (p.paddleY + PADDLE_H / 2);
     p.axis = Math.abs(diff) < CPU_DEADZONE ? 0 : clamp(diff / 40, -1, 1) * CPU_MAX_AXIS;
   });
@@ -364,13 +363,19 @@ function onScore(state: GameState, scorer: 0 | 1): PlayerStanding[] | null {
 
 export function standingsFor(state: GameState): PlayerStanding[] {
   // Only real players get standings; a single-player CPU opponent is omitted.
+  // Ties share a rank per the contract (can't happen in a played-out match,
+  // but holds for any early/aborted report).
   const ranked = state.players.filter((p) => !p.cpu).sort((a, b) => b.score - a.score);
-  return ranked.map((p, i) => ({
-    slot: p.slot,
-    profileId: p.profileId,
-    rank: i + 1,
-    score: p.score,
-  }));
+  let rank = 1;
+  return ranked.map((p, i) => {
+    if (i > 0 && p.score < ranked[i - 1].score) rank = i + 1;
+    return {
+      slot: p.slot,
+      profileId: p.profileId,
+      rank,
+      score: p.score,
+    };
+  });
 }
 
 function updateFx(state: GameState, dt: number): void {

@@ -16,7 +16,7 @@ It is a **pnpm workspace monorepo** (Node ≥20, TypeScript strict, Vite, Vitest
 
 ```bash
 pnpm install          # install all workspace deps (or run ./setup.sh)
-pnpm dev              # run shell + raskulls/pong/space-invaders/iron-yard dev servers in parallel
+pnpm dev              # run shell + raskulls/pong/space-invaders/stick-smash/iron-yard/fowl-play dev servers in parallel
 pnpm build            # typecheck, then build packages → games → apps (ordered)
 pnpm typecheck        # tsc --noEmit across every workspace package
 pnpm test             # vitest run (all packages/games/apps)
@@ -52,28 +52,30 @@ builds in dependency order (packages, then games, then apps).
 - `packages/controls` — optional shell-forwarded normalized input frames.
 - `packages/data` — local profile + match-record persistence with derived stats.
 - `packages/ui` — shared controller-focus navigation, theme, widgets (typecheck only).
-- `packages/game-kit` — *planned*, not yet present.
+- `packages/game-kit` — shared per-player viewport/split-screen layout helpers.
 - `apps/shell` — the launcher app (React + Zustand + Vite). Entry into everything.
 - `apps/desktop` — Electron wrapper around `apps/shell`. Only needed by games
   whose manifest declares `build.desktopServer` (a locally-spawned Node server
   process the browser can't start on its own, e.g. mydrunner); see
   `apps/desktop/src/gameServer.ts`. Plain-browser `apps/shell` still runs and
   is unaffected — such games are just disabled outside the desktop wrapper.
-- `games/{pong,space-invaders,raskulls,iron-yard,party-mix,mydrunner}` — bundled
-  games, each a small Vite app with a `game.manifest.ts`. Party-mix is
+- `games/{pong,space-invaders,raskulls,iron-yard,fowl-play,stick-smash,party-mix,mydrunner}`
+  — bundled games, each a small Vite app with a `game.manifest.ts`. Party-mix is
   parked/disabled. `mydrunner` is a thin wrapper: its real source is a
   separate repo/workspace (different Node engine requirement), built and
-  copied in by `games/mydrunner/scripts/build.mjs`.
+  copied in by `games/mydrunner/scripts/build.mjs`. `stick-smash` vendors its
+  real game as a git submodule (`games/stick-smash/upstream`, see its
+  `UPSTREAM.md`); only the PFP adapter glue lives in `src/`.
 
 Package names are all `@pfp/<dir>` (e.g. `@pfp/shell`, `@pfp/sdk`). Cross-package
 deps use `workspace:*`.
 
 ## Architecture — the big picture
 
-The shell and each game live in **separate iframes** and communicate *only*
+The shell and each game live in **separate iframes** and communicate _only_
 through the SDK's `postMessage` contract (channel `"pfp"`). This buys isolation
 (a buggy game can't crash the shell), engine independence (Godot exports look
-like native games), and a clean plug-in story. First-party games may *also*
+like native games), and a clean plug-in story. First-party games may _also_
 import shared packages directly — the "hybrid" coupling model.
 
 **The contract (`@pfp/sdk`) is the heart of the system.** Read
@@ -94,11 +96,12 @@ before changing anything protocol-shaped. Key pieces:
   game with zero knowledge of its rules, and lets achievements be added and
   **back-filled over history** later — so never discard match data.
 - **Match records are the source of truth** (`@pfp/data`). All aggregate stats
-  are *derived* by querying immutable records, never stored as the primary copy.
+  are _derived_ by querying immutable records, never stored as the primary copy.
   Storage is IndexedDB now, behind a `DataStore` interface so it can swap to
   Tauri/SQLite/cloud later without touching callers.
 
 **Input has two modes.** Each game declares `input.mode` in its manifest:
+
 - `direct` (current default for all games) — game reads `navigator.getGamepads()`
   itself using the `gamepadIndex` from each player slot.
 - `forwarded` / `hybrid` — shell sends normalized `ControlFrame`s via
@@ -112,22 +115,30 @@ A game is any web page that runs in an iframe and speaks the contract. Steps
 
 1. Create `games/your-game/` with `index.html`, optional `game.ts`/`vite.config.ts`.
 2. Add `games/your-game/game.manifest.ts` using `satisfies GameManifest`.
-3. **Wire the manifest into `apps/shell/src/games.ts`** — the catalog imports are
-   still explicit. (Catalog generation is planned but not done; until then this
-   manual edit is required, and it's the easiest step to forget.)
+3. **Regenerate the shell catalog:** `pnpm generate:game-catalog` rewrites
+   `apps/shell/src/games.generated.ts` (never edit it by hand). `pnpm build`
+   runs `check:game-catalog` and fails if the catalog is stale.
 4. Game calls `client.ready()`, handles `launch`/`pause`/`resume`/`terminate`,
    and ends with `client.gameOver(result)` giving every player a `rank`.
    `result.gameId` must match the manifest `id`; `result.sessionId` must match
-   the `LaunchContext.sessionId`.
+   the `LaunchContext.sessionId` — the shell enforces both (plus structural
+   sanity of `standings`, via the SDK's `validateGameResult`) and discards
+   non-conforming results instead of recording them.
 
 Dev ports are per-game (declared in each game's `package.json` and manifest
-`build.devPort`, e.g. pong 5175, space-invaders 5176).
+`build.devPort`, e.g. pong 5175, space-invaders 5176) and must be unique —
+`apps/shell/test/gameCatalog.test.ts` enforces this.
+
+Keyboard-only players: the shell pairs them with a _negative_ `gamepadIndex`
+(`-slot - 1`, see `apps/shell/src/screens/PairingScreen.tsx`). Direct-input
+games must treat a negative index as "no gamepad" and fall back to keyboard
+input for that slot.
 
 ## Conventions & non-goals
 
 - **Controller-native:** the whole shell UI is drivable with an Xbox controller
-  (D-pad/stick to move focus, A = select, B = back). React is for the *menu UI
-  only* — games render however they want.
+  (D-pad/stick to move focus, A = select, B = back). React is for the _menu UI
+  only_ — games render however they want.
 - **Local-first.** No accounts, no internet, no netcode. Online/cloud sync,
   matchmaking, and a storefront are explicit non-goals for now; games are bundled.
 - Keep the SDK **additive-by-default** and semver it; breaking changes are major

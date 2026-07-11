@@ -21,6 +21,9 @@ export function createParentTransport(options: { targetOrigin?: string } = {}): 
   const handlers = new Set<(message: Envelope) => void>();
 
   const onMessage = (event: MessageEvent) => {
+    // Only the embedding shell may drive the lifecycle — not sibling iframes
+    // or anything else that can obtain a reference to this window.
+    if (event.source !== window.parent) return;
     if (!isEnvelope(event.data)) return;
     for (const handler of handlers) handler(event.data);
   };

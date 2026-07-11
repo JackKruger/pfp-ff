@@ -5,7 +5,7 @@ import {
   KeyboardControlSource,
   type ControlForwarder,
 } from "@pfp/controls";
-import { createIframeHost, SDK_VERSION } from "@pfp/sdk";
+import { createIframeHost, SDK_VERSION, validateGameResult } from "@pfp/sdk";
 import { Btn } from "../components/Btn.js";
 import { useShell } from "../store.js";
 import { useShellTicker } from "../ticker.js";
@@ -207,9 +207,20 @@ export function GameScreen() {
     setOverlayItem("resume");
 
     let closed = false;
+    let launched = false;
+    // Set when `launch` is sent; the game's GameResult must echo it back.
+    let launchedSessionId: string | null = null;
     let unregisterControlForwarder: (() => void) | null = null;
     const desktopServer = game.build?.desktopServer;
-    const host = createIframeHost(iframe, { sdkRange: game.sdk });
+    // Restrict postMessage delivery to the game's own origin so the launch
+    // context is never handed to whatever the iframe may have navigated to.
+    // Opaque origins ("null", e.g. the packaged Electron shell served from
+    // file://) are not legal postMessage targets, so fall back to "*" there.
+    const entryOrigin = new URL(game.entry, window.location.href).origin;
+    const host = createIframeHost(iframe, {
+      sdkRange: game.sdk,
+      targetOrigin: entryOrigin === "null" || entryOrigin === "" ? "*" : entryOrigin,
+    });
     hostRef.current = host;
 
     // Unconditional (not gated by "did the start call resolve yet") so a
@@ -266,6 +277,13 @@ export function GameScreen() {
 
     host.onReady(() => {
       if (closed) return;
+      // A second `ready` (game reloaded itself, or a misbehaving client) must
+      // not launch a second session or wire a second control forwarder.
+      if (launched) {
+        console.warn(`${game.id} sent ready again after launch; ignoring.`);
+        return;
+      }
+      launched = true;
       const settings = validateSettingsFor(game, selectedGameSettings);
       if (!settings.ok) {
         console.error("Invalid game settings:", settings.errors);
@@ -300,6 +318,7 @@ export function GameScreen() {
           players,
           settings: serverUrl ? { ...settings.value, serverUrl } : settings.value,
         };
+        launchedSessionId = context.sessionId;
 
         host.launch(context);
         if (usesShellForwardedInput(game)) {
@@ -326,6 +345,18 @@ export function GameScreen() {
 
     host.onGameOver((result) => {
       if (closed) return;
+      // Match records are immutable once stored, so reject a result whose
+      // structure is malformed or that isn't for the game/session we launched
+      // (e.g. a stale report after a self-reload) before it can be recorded.
+      const resultErrors = validateGameResult(result, {
+        gameId: game.id,
+        ...(launchedSessionId !== null ? { sessionId: launchedSessionId } : {}),
+      });
+      if (resultErrors.length > 0) {
+        console.error(`${game.id} sent an invalid GameResult; discarding it:`, resultErrors);
+        returnToShell();
+        return;
+      }
       closed = true;
       // session.endless games have no ranking to show or record — enforced
       // here (not just left to the game's own choice of requestExit vs
